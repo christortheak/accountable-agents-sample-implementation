@@ -56,7 +56,7 @@ On a Mac, Docker can come from [Colima](https://github.com/abiosoft/colima): `br
 On the server:
 
 ```bash
-git clone <repository-url> aaf && cd aaf
+git clone https://github.com/christortheak/accountable-agents-framework.git aaf && cd aaf
 ```
 
 ```bash

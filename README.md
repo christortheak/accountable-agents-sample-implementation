@@ -1,6 +1,6 @@
 # Accountable Agents Framework: reference implementation
 
-A working implementation of the framework described in *The Accountable Agents Framework* (forthcoming). It has three parts:
+A working implementation of the framework described in *The Accountable Agents Framework* (forthcoming). It has four parts:
 
 - **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.2), with real example artifacts in [`spec/examples/`](spec/examples/).
 - **Running services**: an OpenID Federation trust anchor, two federated registries (US and EU), and two record keepers (authorization and provenance; activity).
@@ -36,6 +36,10 @@ Existing specifications are used wherever one fits. The profile's own designs ar
 [Spec §15](spec/AAF-SPEC.md#15-reuse-of-existing-specifications) accounts for every part.
 
 ## Quick start
+
+```bash
+git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
+```
 
 ```bash
 npm run sim

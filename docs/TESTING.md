@@ -3,13 +3,13 @@
 Everything runs on one machine with **Node.js 22 or later**. There are no dependencies to install.
 
 ```bash
-git clone <repository-url> && cd <repository>
+git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
 npm run sim
 ```
 
 ## Run in the browser instead (GitHub Codespaces)
 
-On the repository's GitHub page, choose **Code → Codespaces → Create codespace**. When the terminal opens, run `npm run sim` or `npm test`. Dashboards open through the **Ports** tab. Codespaces runs on your own GitHub account's free monthly allowance.
+On [the repository's GitHub page](https://github.com/christortheak/accountable-agents-framework), choose **Code → Codespaces → Create codespace**. When the terminal opens, run `npm run sim` or `npm test`. Dashboards open through the **Ports** tab. Codespaces runs on your own GitHub account's free monthly allowance.
 
 The passkey demo does not work in Codespaces, because passkeys are tied to the `localhost` domain the demo uses. Run that one on your own computer.
 

@@ -10,7 +10,7 @@ Nothing real is bought or sold. The shop only records decisions.
 - This repository:
 
 ```bash
-git clone <repository-url> && cd <repository>
+git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
 ```
 
 To get the `aaf` command on your path:
