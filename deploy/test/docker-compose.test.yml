@@ -1,0 +1,67 @@
+# Check the pilot deployment on one machine before going live. Run deploy/test/check.sh
+# rather than this file directly: it generates the configs this file mounts.
+#
+# The same image, Compose file and Caddyfile as a real pilot, with four changes:
+#   - made-up *.pilot.test names, which the containers resolve to Caddy;
+#   - certificates from Caddy's own local CA instead of Let's Encrypt, trusted by the containers;
+#   - HTTPS published on 127.0.0.1:8443 only, so it can't clash with a real pilot on the same server;
+#   - a "participant" container that runs the aaf command-line tool.
+# Paths are relative to deploy/, the directory of the base Compose file.
+services:
+  federation:
+    image: aaf-pilot-test
+    command: [sh, -c, 'until [ -s /ca/root.crt ]; do sleep 1; done; exec node scripts/start.js']
+    environment:
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
+    volumes:
+      - ./test/out/federation.pilot.json:/app/config/federation.pilot.json:ro
+      - test-ca:/ca:ro
+
+  shop:
+    image: aaf-pilot-test
+    command: [sh, -c, 'until [ -s /ca/root.crt ]; do sleep 1; done; exec node src/rp/standalone.js --config /app/config/rp.pilot.json']
+    environment:
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
+    volumes:
+      - ./test/out/rp.pilot.json:/app/config/rp.pilot.json:ro
+      - test-ca:/ca:ro
+
+  caddy:
+    ports: !override ["127.0.0.1:8443:443"]
+    env_file: !reset []
+    environment:
+      FEDERATION_DOMAIN: federation.pilot.test
+      REGISTRY_DOMAIN: registry.pilot.test
+      RECORDS_DOMAIN: records.pilot.test
+      SHOP_DOMAIN: shop.pilot.test
+    volumes:
+      - ./test/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/pilot.caddyfile:ro
+    networks:
+      default:
+        aliases: [federation.pilot.test, registry.pilot.test, records.pilot.test, shop.pilot.test]
+
+  # Caddy keeps its root certificate readable only by root; copy it where the Node containers can read it.
+  ca:
+    image: caddy:2
+    command: [sh, -c, 'until [ -s /caddy-data/caddy/pki/authorities/local/root.crt ]; do sleep 1; done; cp /caddy-data/caddy/pki/authorities/local/root.crt /ca/root.crt && chmod 644 /ca/root.crt']
+    volumes:
+      - caddy-data:/caddy-data:ro
+      - test-ca:/ca
+    depends_on: [caddy]
+
+  # A participant's computer: docker compose … run --rm participant <aaf command>
+  participant:
+    image: aaf-pilot-test
+    profiles: [participant]
+    entrypoint: [node, src/cli/aaf.js]
+    environment:
+      AAF_HOME: /data/aaf
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
+    volumes:
+      - participant-data:/data
+      - test-ca:/ca:ro
+
+volumes:
+  test-ca:
+  participant-data:

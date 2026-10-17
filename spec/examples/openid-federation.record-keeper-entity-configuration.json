@@ -1,0 +1,73 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "entity-statement+jwt",
+    "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek"
+  },
+  "payload": {
+    "iss": "https://records-1.aaf.test",
+    "sub": "https://records-1.aaf.test",
+    "iat": 1792270758,
+    "exp": 1792357158,
+    "jwks": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "x": "vosw9DsrRL3uownimJovvfqVj_JhnatrZxmGygN9fts",
+          "kty": "OKP",
+          "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek",
+          "use": "sig"
+        }
+      ]
+    },
+    "metadata": {
+      "aaf_record_keeper": {
+        "organization_name": "Ledgerline Records (authorization + provenance)",
+        "roles": [
+          "authorization",
+          "provenance"
+        ],
+        "endpoint_base": "http://127.0.0.1:8201",
+        "jwks": {
+          "keys": [
+            {
+              "crv": "Ed25519",
+              "x": "vosw9DsrRL3uownimJovvfqVj_JhnatrZxmGygN9fts",
+              "kty": "OKP",
+              "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek",
+              "use": "sig"
+            }
+          ]
+        },
+        "endpoints": {
+          "token": "/token",
+          "status_lists": "/status-lists/1",
+          "provenance": "/v1/provenance",
+          "activity": "/v1/activity",
+          "log": "/v1/log/sth"
+        }
+      }
+    },
+    "authority_hints": [
+      "https://federation.aaf.test"
+    ],
+    "trust_marks": [
+      {
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/authorization",
+        "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
+      },
+      {
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/provenance",
+        "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
+      },
+      {
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/authorization",
+        "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
+      },
+      {
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/provenance",
+        "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
+      }
+    ]
+  }
+}

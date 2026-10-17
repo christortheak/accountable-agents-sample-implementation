@@ -1,0 +1,24 @@
+{
+  "name": "aaf-reference",
+  "version": "0.1.0",
+  "description": "Reference implementation of the Accountable Agents Framework: registries, record keepers, and a transaction simulator.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node scripts/start.js",
+    "sim": "node src/sim/run.js",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "reset": "node scripts/setup.js --reset",
+    "demo": "node src/demo/server.js",
+    "aaf": "node src/cli/aaf.js",
+    "rp": "node src/rp/standalone.js"
+  },
+  "license": "MIT",
+  "bin": {
+    "aaf": "src/cli/aaf.js"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "aaf-grant+jwt",
+    "kid": "wUy0hKWac7W0GEnWRrnJqpKIRk-IkjHyiTjqakaMwYk",
+    "jwk": {
+      "crv": "Ed25519",
+      "x": "ZXWgFQwNPGnVKBaxHWqTNrJ3g6tSF0aBr7m5sEnLsAs",
+      "kty": "OKP",
+      "kid": "wUy0hKWac7W0GEnWRrnJqpKIRk-IkjHyiTjqakaMwYk"
+    }
+  },
+  "payload": {
+    "iss": "principal:prn_8m47hf116xf8tn60f4kjqx927r@https://registry-a.aaf.test",
+    "sub": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+    "registry": "https://registry-a.aaf.test",
+    "agent_key": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4",
+    "iat": 1792270758,
+    "nbf": 1792270758,
+    "exp": 1794862758,
+    "jti": "grt_4zkfdr2rgx4ny4ee2210",
+    "authorization_details": [
+      {
+        "type": "commerce",
+        "actions": [
+          "purchase"
+        ],
+        "max_amount": {
+          "value": 500,
+          "currency": "USD"
+        },
+        "categories": [
+          "office"
+        ]
+      },
+      {
+        "type": "travel",
+        "actions": [
+          "book"
+        ]
+      }
+    ],
+    "prohibitions": [
+      {
+        "type": "commerce",
+        "actions": [
+          "subscribe"
+        ]
+      }
+    ],
+    "delegation": {
+      "allowed": false,
+      "max_depth": 0
+    },
+    "purpose": "Office supplies"
+  }
+}

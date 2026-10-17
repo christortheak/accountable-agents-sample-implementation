@@ -1,0 +1,14 @@
+{
+  "name": "Accountable Agents Framework",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "npm run setup",
+  "forwardPorts": [4100, 4101, 4102, 4201, 4202, 4400],
+  "portsAttributes": {
+    "4100": { "label": "Trust anchor" },
+    "4101": { "label": "Registry A" },
+    "4102": { "label": "Registry B" },
+    "4201": { "label": "Record keeper (authorization + provenance)" },
+    "4202": { "label": "Record keeper (activity)" },
+    "4400": { "label": "Sandbox shop" }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "resolution_id": "res_1zejgp574wagvza1",
+  "ppid": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
+  "ppid_status": "active",
+  "ppid_issued_at": "2026-10-17T20:59:18.137Z",
+  "authority": "https://court.sdny.test",
+  "case": "Example v. Doe",
+  "root_principal": {
+    "principal_id": "prn_8m47hf116xf8tn60f4kjqx927r",
+    "type": "legal_person",
+    "identity": {
+      "legal_name": "Example Corp",
+      "jurisdiction": "US-DE",
+      "registration_number": "DE-1234567"
+    },
+    "contact": null,
+    "verification": {
+      "verifier": "https://kyc.verifier.test",
+      "trust_framework": "aaf_kyb",
+      "assurance_level": "high",
+      "time": "2026-10-17T20:59:18.130Z",
+      "verification_process": "kyc_0vzs56hc3qhze",
+      "evidence": [
+        {
+          "type": "electronic_record",
+          "check_details": [
+            {
+              "check_method": "data",
+              "txn": "kyc_0vzs56hc3qhze"
+            }
+          ],
+          "time": "2026-10-17T20:59:18.130Z",
+          "record": {
+            "type": "company_register_extract",
+            "source": {
+              "name": "company register (simulated)"
+            }
+          }
+        },
+        {
+          "type": "electronic_record",
+          "check_details": [
+            {
+              "check_method": "data",
+              "txn": "kyc_0vzs56hc3qhze"
+            }
+          ],
+          "time": "2026-10-17T20:59:18.130Z",
+          "record": {
+            "type": "beneficial_ownership_register",
+            "source": {
+              "name": "beneficial ownership register (simulated)"
+            }
+          }
+        }
+      ]
+    },
+    "registry": "https://registry-a.aaf.test"
+  },
+  "chain": [
+    {
+      "registry": "https://registry-a.aaf.test",
+      "registration_id": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+      "label": "purchasing agent",
+      "status": "active",
+      "reason": null,
+      "created_at": "2026-10-17T20:59:18.134Z",
+      "revoked_at": null,
+      "expires_at": null,
+      "provider": null
+    }
+  ],
+  "related_ppids": []
+}

@@ -1,0 +1,38 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "aaf-registration+jwt",
+    "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+  },
+  "payload": {
+    "iss": "https://registry-a.aaf.test",
+    "sub": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+    "iat": 1792270758,
+    "agent_key": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4",
+    "principal": {
+      "type": "principal",
+      "id": "prn_8m47hf116xf8tn60f4kjqx927r",
+      "key_thumbprints": [
+        "wUy0hKWac7W0GEnWRrnJqpKIRk-IkjHyiTjqakaMwYk"
+      ]
+    },
+    "depth": 1,
+    "version": 0,
+    "records": [
+      {
+        "role": "authorization",
+        "rk": "https://records-1.aaf.test"
+      },
+      {
+        "role": "provenance",
+        "rk": "https://records-1.aaf.test",
+        "ref": "prov_KsdVq6cQSsn2t8xUe3-WNA"
+      },
+      {
+        "role": "activity",
+        "rk": "https://records-2.aaf.test"
+      }
+    ],
+    "expires_at": null
+  }
+}

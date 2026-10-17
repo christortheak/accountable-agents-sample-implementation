@@ -1,0 +1,51 @@
+{
+  "name": "AAF Pilot Federation",
+  "description": "Template for a live pilot. Copy to config/federation.pilot.json (git-ignored), replace example.org with your domain, and run with AAF_CONFIG=config/federation.pilot.json. Each publicUrl must be served over HTTPS by a reverse proxy that forwards to the port below (see deploy/).",
+  "host": "127.0.0.1",
+  "listenHost": "0.0.0.0",
+  "trustAnchor": {
+    "id": "https://federation.example.org",
+    "publicUrl": "https://federation.example.org",
+    "name": "AAF Pilot Federation (trust anchor)",
+    "port": 4100
+  },
+  "services": [
+    {
+      "id": "https://registry.example.org",
+      "publicUrl": "https://registry.example.org",
+      "kind": "registry",
+      "name": "AAF Pilot Registry",
+      "jurisdiction": "US",
+      "port": 4101
+    },
+    {
+      "id": "https://records.example.org",
+      "publicUrl": "https://records.example.org",
+      "kind": "record-keeper",
+      "name": "AAF Pilot Record Keeper",
+      "roles": ["authorization", "provenance", "activity"],
+      "accreditedBy": ["https://registry.example.org"],
+      "port": 4201
+    }
+  ],
+  "authorities": [
+    {
+      "id": "https://federation.example.org/verifier",
+      "kind": "verifier",
+      "name": "AAF pilot team (identity verification from personal knowledge)"
+    },
+    {
+      "id": "https://federation.example.org/resolution-authority",
+      "kind": "resolution-authority",
+      "name": "AAF pilot team acting as a mock court (demonstrations only)"
+    }
+  ],
+  "policies": {
+    "revocationIntervalSeconds": 300,
+    "attestationTtlSeconds": 300,
+    "statusCacheSeconds": 15,
+    "statusListTtlSeconds": 10,
+    "maxChainDepth": 8,
+    "recordRetentionYears": 1
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "aaf-provenance+jwt",
+    "kid": "bLI6EGQo679a0egRCcak8WLf_1N3vrv6M1tV1TTIT2A",
+    "jwk": {
+      "crv": "Ed25519",
+      "x": "ru8elGn0ZxE-uRpXdPAPiO3nrwZJTiNoZWTuh7JnTcE",
+      "kty": "OKP",
+      "kid": "bLI6EGQo679a0egRCcak8WLf_1N3vrv6M1tV1TTIT2A"
+    }
+  },
+  "payload": {
+    "provider": {
+      "name": "Example Agents Inc.",
+      "contact": "sec@agents.example"
+    },
+    "bom": {
+      "bomFormat": "CycloneDX",
+      "specVersion": "1.6",
+      "serialNumber": "urn:uuid:1b23f1b5-c87d-4aba-9392-c07b0eb3f79f",
+      "version": 1,
+      "metadata": {
+        "timestamp": "2026-10-17T20:59:18.133Z",
+        "supplier": {
+          "name": "Example Agents Inc.",
+          "contact": [
+            {
+              "email": "sec@agents.example"
+            }
+          ]
+        },
+        "component": {
+          "type": "application",
+          "bom-ref": "agent",
+          "name": "Example Agent 1.0",
+          "supplier": {
+            "name": "Example Agents Inc."
+          },
+          "externalReferences": [
+            {
+              "type": "security-contact",
+              "url": "mailto:sec@agents.example"
+            }
+          ],
+          "properties": [
+            {
+              "name": "aaf:incident-response:constrain-endpoint",
+              "value": "https://agents.example/constrain"
+            },
+            {
+              "name": "aaf:incident-response:notify-principal-via",
+              "value": "registry"
+            }
+          ]
+        }
+      },
+      "components": [
+        {
+          "type": "machine-learning-model",
+          "bom-ref": "component-1",
+          "name": "example-model",
+          "version": "2026-09",
+          "supplier": {
+            "name": "Example Lab"
+          }
+        },
+        {
+          "type": "application",
+          "bom-ref": "component-2",
+          "name": "browser",
+          "version": "3.1"
+        }
+      ],
+      "dependencies": [
+        {
+          "ref": "agent",
+          "dependsOn": [
+            "component-1",
+            "component-2"
+          ]
+        }
+      ]
+    },
+    "iat": 1792270758
+  }
+}

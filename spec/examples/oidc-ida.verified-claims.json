@@ -1,0 +1,47 @@
+{
+  "verification": {
+    "trust_framework": "aaf_kyb",
+    "assurance_level": "high",
+    "time": "2026-10-17T20:59:18.130Z",
+    "verification_process": "kyc_example",
+    "evidence": [
+      {
+        "type": "electronic_record",
+        "check_details": [
+          {
+            "check_method": "data",
+            "txn": "kyc_example"
+          }
+        ],
+        "time": "2026-10-17T20:59:18.130Z",
+        "record": {
+          "type": "company_register_extract",
+          "source": {
+            "name": "company register (simulated)"
+          }
+        }
+      },
+      {
+        "type": "electronic_record",
+        "check_details": [
+          {
+            "check_method": "data",
+            "txn": "kyc_example"
+          }
+        ],
+        "time": "2026-10-17T20:59:18.130Z",
+        "record": {
+          "type": "beneficial_ownership_register",
+          "source": {
+            "name": "beneficial ownership register (simulated)"
+          }
+        }
+      }
+    ]
+  },
+  "claims": {
+    "legal_name": "Example Corp",
+    "jurisdiction": "US-DE",
+    "registration_number": "DE-1234567"
+  }
+}

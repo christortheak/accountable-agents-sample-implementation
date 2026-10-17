@@ -1,0 +1,55 @@
+{
+  "offer": {
+    "offer_id": "xfr_p2fmbw0436sajre8c020",
+    "registration_id": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+    "to_principal": "prn_2wxwdbk435hxyxhqqfxr00h52g",
+    "subtree": "move",
+    "expires_at": "2026-10-24T20:59:18.151Z"
+  },
+  "accepted": {
+    "registration_id": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+    "receipt": {
+      "header": {
+        "alg": "EdDSA",
+        "typ": "aaf-registration+jwt",
+        "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+      },
+      "payload": {
+        "iss": "https://registry-a.aaf.test",
+        "sub": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+        "iat": 1792270758,
+        "agent_key": "DgLhGwEV6jxM63PF78pAROKBYuK91NbdHSfQHr1wN0E",
+        "principal": {
+          "type": "principal",
+          "id": "prn_2wxwdbk435hxyxhqqfxr00h52g",
+          "key_thumbprints": [
+            "66NMeQpjseUu178QPBWWk3PhkdPfN_f0Byztg2PlmtM"
+          ]
+        },
+        "depth": 1,
+        "version": 1,
+        "records": [
+          {
+            "role": "authorization",
+            "rk": "https://records-1.aaf.test"
+          },
+          {
+            "role": "provenance",
+            "rk": "https://records-1.aaf.test",
+            "ref": "prov_KsdVq6cQSsn2t8xUe3-WNA"
+          },
+          {
+            "role": "activity",
+            "rk": "https://records-2.aaf.test"
+          }
+        ],
+        "expires_at": null
+      }
+    },
+    "version": 1,
+    "subtree": "move",
+    "descendants_moved": 0,
+    "descendants_ended": 0,
+    "peers_notified": []
+  }
+}

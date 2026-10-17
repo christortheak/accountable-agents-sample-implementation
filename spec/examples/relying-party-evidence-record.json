@@ -1,0 +1,129 @@
+{
+  "txn": "txn_9gfjt9bsxrt4ykea",
+  "at": "2026-10-17T20:59:18.142Z",
+  "action": "commerce.purchase",
+  "params": {
+    "amount": {
+      "value": 42,
+      "currency": "USD"
+    },
+    "category": "office"
+  },
+  "decision": "allow",
+  "reasons": [],
+  "tier": "standard",
+  "classification": "ACCOUNTABLE_DISCLOSED",
+  "ppid": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
+  "ppid_mode": "pairwise",
+  "registry": "https://registry-a.aaf.test",
+  "sealed_ref": null,
+  "root": {
+    "type": "legal_person",
+    "trust_framework": "aaf_kyb",
+    "assurance": "high",
+    "verifier": "https://kyc.verifier.test",
+    "identity": {
+      "registration_number": "DE-1234567",
+      "legal_name": "Example Corp"
+    }
+  },
+  "chain_length": 1,
+  "attributes": [],
+  "authority_relied_on": [
+    {
+      "type": "commerce",
+      "actions": [
+        "purchase"
+      ],
+      "max_amount": {
+        "value": 500,
+        "currency": "USD"
+      },
+      "categories": [
+        "office"
+      ]
+    }
+  ],
+  "approval": null,
+  "status_tokens": [
+    "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…",
+    "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…"
+  ],
+  "presentation_digest": "X88MjKqLNO9KkHGzYtSU1Xe6xZiEoQmrPI5zehVWWNo",
+  "checks": [
+    {
+      "name": "issued by a federation registry",
+      "ok": true,
+      "detail": "https://registry-a.aaf.test"
+    },
+    {
+      "name": "registry signature valid (SD-JWT VC)",
+      "ok": true,
+      "detail": "https://federation.aaf.test/vct/accountability/1"
+    },
+    {
+      "name": "issued for this relying party",
+      "ok": true,
+      "detail": "shop.example"
+    },
+    {
+      "name": "credential unexpired",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "request signed by the credential holder (RFC 9421 + key binding)",
+      "ok": true,
+      "detail": "covers method, URL, body and presentation"
+    },
+    {
+      "name": "chain ends in a verified legal person",
+      "ok": true,
+      "detail": "legal_person, aaf_kyb high, verified by https://kyc.verifier.test"
+    },
+    {
+      "name": "status list entry (fetched now)",
+      "ok": true,
+      "detail": "VALID"
+    },
+    {
+      "name": "authorization from a federation record keeper",
+      "ok": true,
+      "detail": "https://records-1.aaf.test"
+    },
+    {
+      "name": "record keeper holds https://registry-a.aaf.test's trust mark for authorization records",
+      "ok": true,
+      "detail": "trust mark verified"
+    },
+    {
+      "name": "authorization bound to this agent (act.sub = PPID, same cnf key)",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "authorization unexpired",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "grant still in force (status list)",
+      "ok": true,
+      "detail": "VALID"
+    },
+    {
+      "name": "authority covers the requested action",
+      "ok": true,
+      "detail": "commerce.purchase"
+    }
+  ],
+  "activity_receipt": {
+    "log_id": "https://records-2.aaf.test",
+    "index": 0,
+    "leaf_hash": "59eT0DaQ3BxfzSU2GqN9svTCrmHzUc-Dfn64n_jZwHA",
+    "tree_size": 1,
+    "inclusion_proof": [],
+    "sth": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1zdGgrand0Iiwia2lkIjoiRXBEUDNzdTVOb194VVJScWNoeXlBMjBMdFdFcUx5UEZvcmRUbzV0bWNHRSJ9.eyJsb2dfaWQiOiJodHRwczovL3JlY29yZHMtMi5hYWYudGVzdCIsInRyZWVfc2l6ZSI6MSwicm9vdF9oYXNoIjoiNTllVDBEYVEzQnhmelNVMkdxTjlzdlRDcm1IelVjLURmbjY0bl9qWndIQSIsInRpbWVzdGFtcCI6MTc5MjI3MDc1ODE0M30.O_KsdRg8CeIwiE8nMec5xXV-yWC_HU66S1Pgjhk52_wmCCVKY734GiZ3n-x31BGsBADBFw_FuwIcYd17K_YMCQ"
+  },
+  "account_gate": null
+}

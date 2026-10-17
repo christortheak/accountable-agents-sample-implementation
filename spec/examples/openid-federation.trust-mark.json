@@ -1,0 +1,14 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "trust-mark+jwt",
+    "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+  },
+  "payload": {
+    "iss": "https://registry-a.aaf.test",
+    "sub": "https://records-1.aaf.test",
+    "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/authorization",
+    "iat": 1792270758,
+    "exp": 1823806758
+  }
+}

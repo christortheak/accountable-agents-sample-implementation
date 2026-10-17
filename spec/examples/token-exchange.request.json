@@ -1,0 +1,43 @@
+{
+  "method": "POST",
+  "url": "https://records-1.aaf.test/token",
+  "content_type": "application/x-www-form-urlencoded",
+  "form": {
+    "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+    "subject_token": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1ncmFu…",
+    "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+    "actor_token": "eyJhbGciOiJFZERTQSIsInR5cCI6ImRjK3NkLWp3…",
+    "actor_token_type": "urn:aaf:params:oauth:token-type:accountability",
+    "requested_token_type": "urn:aaf:params:oauth:token-type:authorization",
+    "audience": "shop.example",
+    "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+    "client_assertion": "<JWT below>"
+  },
+  "client_assertion": {
+    "header": {
+      "alg": "EdDSA",
+      "typ": "JWT",
+      "kid": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4",
+      "jwk": {
+        "crv": "Ed25519",
+        "x": "edxzdijIpNYiSTpAoCSK9ozDPlFfZTwDuAnM_rn_7wE",
+        "kty": "OKP",
+        "kid": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4"
+      }
+    },
+    "payload": {
+      "iss": "urn:aaf:registration:reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+      "sub": "urn:aaf:registration:reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+      "aud": "https://records-1.aaf.test/token",
+      "iat": 1792270758,
+      "exp": 1792270818,
+      "jti": "ca_79fqpp15zqg53c4mbdz0"
+    }
+  },
+  "response": {
+    "access_token": "<authorization-credential.issued>",
+    "issued_token_type": "urn:aaf:params:oauth:token-type:authorization",
+    "token_type": "N_A",
+    "expires_in": 300
+  }
+}

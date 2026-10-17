@@ -1,0 +1,34 @@
+# HTTPS for each service, with certificates obtained automatically.
+# Domains come from deploy/.env and must match the publicUrl values in the config files.
+
+# Operator endpoints are only ever called from inside the server; never expose them.
+(no_admin) {
+	handle /admin/* {
+		respond "Not found" 404
+	}
+}
+
+{$FEDERATION_DOMAIN} {
+	import no_admin
+	handle {
+		reverse_proxy federation:4100
+	}
+}
+
+{$REGISTRY_DOMAIN} {
+	import no_admin
+	handle {
+		reverse_proxy federation:4101
+	}
+}
+
+{$RECORDS_DOMAIN} {
+	import no_admin
+	handle {
+		reverse_proxy federation:4201
+	}
+}
+
+{$SHOP_DOMAIN} {
+	reverse_proxy shop:4400
+}

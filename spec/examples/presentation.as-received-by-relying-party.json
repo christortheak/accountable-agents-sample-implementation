@@ -1,0 +1,232 @@
+{
+  "http_headers": {
+    "content-type": "application/json",
+    "content-digest": "sha-256=:<base64 of SHA-256(body)>:",
+    "aaf-presentation": "<base64url JSON below>",
+    "signature-input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\" \"content-type\" \"aaf-presentation\");created=1792270758;nonce=\"n_t40nnj66wt0bvrrqzwtg\";alg=\"ed25519\";keyid=\"cnf:ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw\";tag=\"aaf-agent\"",
+    "signature": "sig1=:VpQGdXbwFjp6PLzIiNYUo6T2…"
+  },
+  "presentation": {
+    "v": 2,
+    "accountability": {
+      "issuer_signed": {
+        "header": {
+          "alg": "EdDSA",
+          "typ": "dc+sd-jwt",
+          "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+        },
+        "payload": {
+          "vct": "https://federation.aaf.test/vct/accountability/1",
+          "iss": "https://registry-a.aaf.test",
+          "sub": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
+          "aud": "shop.example",
+          "iat": 1792270758,
+          "exp": 1792271058,
+          "jti": "att_cvp8af9847nkxv7fratg",
+          "cnf": {
+            "jwk": {
+              "crv": "Ed25519",
+              "x": "PkbcsVXcRMnrsZ2VW78Q8UehZdeuMa0wmPV6wr4MAtc",
+              "kty": "OKP",
+              "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+            }
+          },
+          "ppid_mode": "pairwise",
+          "reg_binding": "pOUDMPnDPpV9EET3SvxCjtbCadW-epXXpTIhQfEkcJA",
+          "accountability": {
+            "status": "accountable",
+            "root_principal": {
+              "type": "legal_person",
+              "verified": true,
+              "verification": {
+                "trust_framework": "aaf_kyb",
+                "assurance_level": "high",
+                "time": "2026-10",
+                "verifier": "https://kyc.verifier.test"
+              },
+              "registry": "https://registry-a.aaf.test",
+              "identity": "disclosable",
+              "disclosed_identity": {
+                "_sd": [
+                  "7myT9mGU6LZXvtByO-hWjwoWEI5sNeLKmH3i6LVwiGQ",
+                  "F8hgTun878DEj4kqvt4sgIYGgX9nSdUrOz6sfULbdGo"
+                ]
+              }
+            },
+            "chain_length": 1,
+            "attributes": [
+              {
+                "...": "7L0mbvsVtxp2tEq5S5gGPi88KsM4u8kXVGmLV-hc-IY"
+              }
+            ]
+          },
+          "records": [
+            {
+              "...": "Jp8pxq5bQAq-V3NwHOmewpB-QC2jVQCkt3jCHqiLzsc"
+            },
+            {
+              "...": "gykwRNrByEgqpysMkvTaASzJpg_NbA-CFql5Gd0Awss"
+            },
+            {
+              "...": "uxrrvTJgii6vEVqOeibZkezQJ8CQz1MCrg_oEzMer-U"
+            }
+          ],
+          "status": {
+            "status_list": {
+              "idx": 55347,
+              "uri": "https://registry-a.aaf.test/status-lists/1"
+            }
+          },
+          "_sd_alg": "sha-256"
+        }
+      },
+      "disclosures": [
+        {
+          "encoded": "WyJFaUpKcThEVVhTcVFRYjdR…",
+          "decoded": [
+            "EiJJq8DUXSqQQb7QsC2hlw",
+            "legal_name",
+            "Example Corp"
+          ]
+        },
+        {
+          "encoded": "WyI3WGVfcmVyUk91dnFZSV9u…",
+          "decoded": [
+            "7Xe_rerROuvqYI_nKjhtuw",
+            "registration_number",
+            "DE-1234567"
+          ]
+        },
+        {
+          "encoded": "WyJtZlk3UHc3WWtsVjdEQnZS…",
+          "decoded": [
+            "mfY7Pw7YklV7DBvR6Obhow",
+            {
+              "role": "authorization",
+              "rk": "https://records-1.aaf.test"
+            }
+          ]
+        },
+        {
+          "encoded": "WyJ0MjJTa0MzYm1lOWRDU0ZE…",
+          "decoded": [
+            "t22SkC3bme9dCSFD0eGo9Q",
+            {
+              "role": "activity",
+              "rk": "https://records-2.aaf.test"
+            }
+          ]
+        }
+      ],
+      "key_binding_jwt": {
+        "header": {
+          "alg": "EdDSA",
+          "typ": "kb+jwt",
+          "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+        },
+        "payload": {
+          "iat": 1792270758,
+          "aud": "shop.example",
+          "nonce": "n_t40nnj66wt0bvrrqzwtg",
+          "sd_hash": "fI_JdPYsdfMbsk-Fw423MjwHMrMtxuiBkCZaFXWhYhs"
+        }
+      }
+    },
+    "authorization": {
+      "issuer_signed": {
+        "header": {
+          "alg": "EdDSA",
+          "typ": "dc+sd-jwt",
+          "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek"
+        },
+        "payload": {
+          "vct": "https://federation.aaf.test/vct/authorization/1",
+          "iss": "https://records-1.aaf.test",
+          "sub": "urn:aaf:pseudonym:9y3h3q5ndq77fs50ha3g",
+          "act": {
+            "sub": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94"
+          },
+          "aud": "shop.example",
+          "iat": 1792270758,
+          "exp": 1792271058,
+          "jti": "az_73kfe4y1aav8wdfb7qjg",
+          "cnf": {
+            "jwk": {
+              "crv": "Ed25519",
+              "x": "PkbcsVXcRMnrsZ2VW78Q8UehZdeuMa0wmPV6wr4MAtc",
+              "kty": "OKP",
+              "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+            }
+          },
+          "authorization_details": [
+            {
+              "...": "_wOSdUGpQzlgZ9A6W_yEsF28GgoA6uvh9iTrllSKbks"
+            },
+            {
+              "...": "_ONCo07n7mFqM4_eX2mRza0mioIRWTSqARmLZXCKTAA"
+            }
+          ],
+          "prohibitions": [
+            {
+              "type": "commerce",
+              "actions": [
+                "subscribe"
+              ]
+            }
+          ],
+          "delegation": {
+            "allowed": false,
+            "max_depth": 0
+          },
+          "granted_on": "2026-10-17",
+          "valid_until": "2026-11-16",
+          "grant_commitment": "gGa0kLytDZgrf1m5nlyjP8jH2IlZyB1AJ7aZ6izhG4Q",
+          "status": {
+            "status_list": {
+              "idx": 59516,
+              "uri": "https://records-1.aaf.test/status-lists/1"
+            }
+          },
+          "_sd": [
+            "rK7ZkKXxySOfRDb9oQtk1VEm19141W2nYR6_1L6C6aE"
+          ],
+          "_sd_alg": "sha-256"
+        }
+      },
+      "disclosures": [
+        {
+          "encoded": "WyIzaWFVQ0l5OVg2aTMteHc0…",
+          "decoded": [
+            "3iaUCIy9X6i3-xw42X2KVQ",
+            {
+              "type": "commerce",
+              "actions": [
+                "purchase"
+              ],
+              "max_amount": {
+                "value": 500,
+                "currency": "USD"
+              },
+              "categories": [
+                "office"
+              ]
+            }
+          ]
+        }
+      ],
+      "key_binding_jwt": {
+        "header": {
+          "alg": "EdDSA",
+          "typ": "kb+jwt",
+          "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+        },
+        "payload": {
+          "iat": 1792270758,
+          "aud": "shop.example",
+          "nonce": "n_t40nnj66wt0bvrrqzwtg",
+          "sd_hash": "2M8Iy4aO5JazS6-aYIGd6CLpZmH33GX47bQ32MZJbRI"
+        }
+      }
+    }
+  }
+}

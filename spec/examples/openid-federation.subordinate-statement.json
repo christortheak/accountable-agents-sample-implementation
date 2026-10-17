@@ -1,0 +1,49 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "entity-statement+jwt",
+    "kid": "tgHrxxI67Z-q719js6nU7-4Z9yFANeDoovRfFqfb-94"
+  },
+  "payload": {
+    "iss": "https://federation.aaf.test",
+    "sub": "https://registry-a.aaf.test",
+    "iat": 1792270758,
+    "exp": 1792357158,
+    "jwks": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+          "kty": "OKP",
+          "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+          "use": "sig"
+        }
+      ]
+    },
+    "metadata": {
+      "aaf_registry": {
+        "organization_name": "Registry A (United States)",
+        "jurisdiction": "US",
+        "endpoint_base": "http://127.0.0.1:8101",
+        "jwks": {
+          "keys": [
+            {
+              "crv": "Ed25519",
+              "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+              "kty": "OKP",
+              "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+              "use": "sig"
+            },
+            {
+              "crv": "X25519",
+              "x": "tv_gJ4nbOVPpcQEUa1qAZhcvKqOgfXYIa-s9j8pLwQU",
+              "kty": "OKP",
+              "kid": "MGhmCwGB7rXqqFE37vpEqZkuEl2ZgwaEttaxUVkWyQA",
+              "use": "enc"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

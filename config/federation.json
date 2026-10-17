@@ -1,0 +1,68 @@
+{
+  "name": "AAF Simulation Federation",
+  "description": "Members of the local federation. scripts/setup.js generates keys for every entry and gives the trust anchor what it needs to publish OpenID Federation statements. Entity identifiers are https URLs; locally each service is served at http://<host>:<port>, which the trust anchor publishes as endpoint_base.",
+  "host": "127.0.0.1",
+  "trustAnchor": {
+    "id": "https://federation.aaf.test",
+    "name": "AAF Simulation Federation (trust anchor)",
+    "port": 4100
+  },
+  "services": [
+    {
+      "id": "https://registry-a.aaf.test",
+      "kind": "registry",
+      "name": "Registry A (United States)",
+      "jurisdiction": "US",
+      "port": 4101
+    },
+    {
+      "id": "https://registry-b.aaf.test",
+      "kind": "registry",
+      "name": "Registry B (European Union)",
+      "jurisdiction": "EU",
+      "port": 4102
+    },
+    {
+      "id": "https://records-1.aaf.test",
+      "kind": "record-keeper",
+      "name": "Ledgerline Records (authorization + provenance)",
+      "roles": ["authorization", "provenance"],
+      "accreditedBy": ["https://registry-a.aaf.test", "https://registry-b.aaf.test"],
+      "port": 4201
+    },
+    {
+      "id": "https://records-2.aaf.test",
+      "kind": "record-keeper",
+      "name": "Tessera Logs (activity)",
+      "roles": ["activity"],
+      "accreditedBy": ["https://registry-a.aaf.test", "https://registry-b.aaf.test"],
+      "allowTamperSimulation": true,
+      "port": 4202
+    }
+  ],
+  "authorities": [
+    {
+      "id": "https://kyc.verifier.test",
+      "kind": "verifier",
+      "name": "VerityCheck KYC/KYB (simulated identity verifier)"
+    },
+    {
+      "id": "https://court.sdny.test",
+      "kind": "resolution-authority",
+      "name": "U.S. District Court (simulated)"
+    },
+    {
+      "id": "https://fincen.test",
+      "kind": "resolution-authority",
+      "name": "Financial crimes regulator (simulated)"
+    }
+  ],
+  "policies": {
+    "revocationIntervalSeconds": 300,
+    "attestationTtlSeconds": 300,
+    "statusCacheSeconds": 15,
+    "statusListTtlSeconds": 10,
+    "maxChainDepth": 8,
+    "recordRetentionYears": 5
+  }
+}

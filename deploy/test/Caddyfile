@@ -1,0 +1,7 @@
+# Local check only: certificates from Caddy's own CA, then the pilot's real site definitions.
+{
+	local_certs
+	skip_install_trust
+}
+
+import /etc/caddy/pilot.caddyfile

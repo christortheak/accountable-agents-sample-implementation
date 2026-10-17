@@ -1,0 +1,43 @@
+# A pilot federation on one server. See docs/DEPLOYING.md.
+#
+#   cp deploy/.env.example deploy/.env                                   (your domains)
+#   cp config/federation.pilot.example.json config/federation.pilot.json  (same domains)
+#   cp config/rp.pilot.example.json config/rp.pilot.json                  (same domains)
+#   docker compose -f deploy/docker-compose.yml up -d --build
+services:
+  federation:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    environment:
+      AAF_CONFIG: /app/config/federation.pilot.json
+    volumes:
+      - federation-data:/data
+      - ../config/federation.pilot.json:/app/config/federation.pilot.json:ro
+    restart: unless-stopped
+
+  shop:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    command: ["node", "src/rp/standalone.js", "--config", "/app/config/rp.pilot.json"]
+    environment:
+      AAF_DATA_DIR: /data
+    volumes:
+      - shop-data:/data
+      - ../config/rp.pilot.json:/app/config/rp.pilot.json:ro
+    depends_on: [federation]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    env_file: .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [federation, shop]
+    restart: unless-stopped
+
+volumes:
+  federation-data:   # the federation's keys and logs: back this up
+  shop-data:
+  caddy-data:        # TLS certificates
+  caddy-config:

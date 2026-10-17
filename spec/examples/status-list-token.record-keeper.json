@@ -1,0 +1,18 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "statuslist+jwt",
+    "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek"
+  },
+  "payload": {
+    "iss": "https://records-1.aaf.test",
+    "sub": "https://records-1.aaf.test/status-lists/1",
+    "iat": 1792270758,
+    "exp": 1792270818,
+    "ttl": 10,
+    "status_list": {
+      "bits": 2,
+      "lst": "eJztwTEBAAAAwqD1T20MH6AAAAAAAAAAAAAAAAAA…"
+    }
+  }
+}

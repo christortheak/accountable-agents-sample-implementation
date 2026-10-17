@@ -1,0 +1,21 @@
+{
+  "id": "https://shop.example.org",
+  "name": "AAF Pilot Shop",
+  "port": 4400,
+  "listenHost": "0.0.0.0",
+  "publicUrl": "https://shop.example.org",
+  "trustAnchor": { "url": "https://federation.example.org", "pin": null },
+  "requests": { "identity": true },
+  "rules": {
+    "content.read": [
+      { "label": "open to everyone", "require": { "accountability": "none", "liveStatus": false } }
+    ],
+    "commerce.purchase": [
+      { "label": "small purchase (up to 20)", "when": { "param": "amount.value", "op": "<=", "value": 20 }, "require": { "accountability": "established", "authorization": true } },
+      { "label": "larger purchase: principal must be disclosed", "require": { "accountability": "disclosed", "authorization": true } }
+    ],
+    "compute.provision": [
+      { "label": "GPU time", "require": { "accountability": "established", "authorization": true } }
+    ]
+  }
+}

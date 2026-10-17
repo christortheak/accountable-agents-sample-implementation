@@ -1,0 +1,20 @@
+{
+  "log_id": "https://records-2.aaf.test",
+  "index": 0,
+  "leaf_hash": "59eT0DaQ3BxfzSU2GqN9svTCrmHzUc-Dfn64n_jZwHA",
+  "tree_size": 1,
+  "inclusion_proof": [],
+  "sth": {
+    "header": {
+      "alg": "EdDSA",
+      "typ": "aaf-sth+jwt",
+      "kid": "EpDP3su5No_xURRqchyyA20LtWEqLyPFordTo5tmcGE"
+    },
+    "payload": {
+      "log_id": "https://records-2.aaf.test",
+      "tree_size": 1,
+      "root_hash": "59eT0DaQ3BxfzSU2GqN9svTCrmHzUc-Dfn64n_jZwHA",
+      "timestamp": 1792270758143
+    }
+  }
+}

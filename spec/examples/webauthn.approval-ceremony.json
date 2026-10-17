@@ -1,0 +1,43 @@
+{
+  "options": {
+    "request_id": "wa_qv5bmypgsm2gdd2gmhx0",
+    "details": {
+      "designation_id": "dsg_eam15hfsgqqrac669c8g",
+      "role": "designated-officer",
+      "ppid": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
+      "action": "commerce.purchase",
+      "subject_digest": "example-digest",
+      "note": null
+    },
+    "publicKey": {
+      "rpId": "records-1.aaf.test",
+      "challenge": "q2SMcjfqozNnCY_J8ftPVYhBTTfMRVnH2OCqLR71I-Y",
+      "allowCredentials": [
+        {
+          "type": "public-key",
+          "id": "5QhqBHQTgyjZDrtQNa8QiLCt49mAc07xReR2x7p3BlY"
+        }
+      ],
+      "userVerification": "required",
+      "timeout": 120000
+    }
+  },
+  "assertion": {
+    "id": "5QhqBHQTgyjZDrtQNa8QiLCt49mAc07xReR2x7p3BlY",
+    "clientDataJSON": {
+      "type": "webauthn.get",
+      "challenge": "q2SMcjfqozNnCY_J8ftPVYhBTTfMRVnH2OCqLR71I-Y",
+      "origin": "https://records-1.aaf.test",
+      "crossOrigin": false
+    },
+    "authenticatorData": {
+      "rpIdHash": "5a399e9197d74d4178b182ff2a532cfa2c53a9f0c9466039978b6f4daadf7ce9",
+      "flags": {
+        "user_present": true,
+        "user_verified": true
+      },
+      "signCount": 1
+    },
+    "signature": "MEUCIQC796u_vAtEwBgS7phrBAbjBA…"
+  }
+}

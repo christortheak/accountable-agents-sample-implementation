@@ -1,0 +1,72 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "entity-statement+jwt",
+    "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+  },
+  "payload": {
+    "iss": "https://registry-a.aaf.test",
+    "sub": "https://registry-a.aaf.test",
+    "iat": 1792270758,
+    "exp": 1792357158,
+    "jwks": {
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+          "kty": "OKP",
+          "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+          "use": "sig"
+        }
+      ]
+    },
+    "metadata": {
+      "aaf_registry": {
+        "organization_name": "Registry A (United States)",
+        "jurisdiction": "US",
+        "endpoint_base": "http://127.0.0.1:8101",
+        "jwks": {
+          "keys": [
+            {
+              "crv": "Ed25519",
+              "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+              "kty": "OKP",
+              "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+              "use": "sig"
+            },
+            {
+              "crv": "X25519",
+              "x": "tv_gJ4nbOVPpcQEUa1qAZhcvKqOgfXYIa-s9j8pLwQU",
+              "kty": "OKP",
+              "kid": "MGhmCwGB7rXqqFE37vpEqZkuEl2ZgwaEttaxUVkWyQA",
+              "use": "enc"
+            }
+          ]
+        },
+        "ppid_modes": [
+          "pairwise",
+          "ephemeral"
+        ],
+        "policies": {
+          "revocation_interval_seconds": 300,
+          "attestation_ttl_seconds": 300,
+          "max_chain_depth": 8,
+          "record_retention_years": 5
+        },
+        "endpoints": {
+          "principals": "/v1/principals",
+          "registrations": "/v1/registrations",
+          "attestations": "/v1/attestations",
+          "status": "/v1/status",
+          "resolutions": "/v1/resolutions",
+          "incidents": "/v1/incidents",
+          "trust_marks": "/federation/trust-mark",
+          "transparency": "/v1/transparency/sth"
+        }
+      }
+    },
+    "authority_hints": [
+      "https://federation.aaf.test"
+    ]
+  }
+}
