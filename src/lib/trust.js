@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { keyFromJwk, thumbprint } from './crypto.js';
+import { decodeJws, keyFromJwk, thumbprint } from './crypto.js';
 import { getJson } from './http.js';
 import { WELL_KNOWN, verifyEntityStatement } from './openid-federation.js';
 
@@ -51,12 +51,16 @@ async function getText(url) {
 }
 
 /** Resolve the federation from its Trust Anchor (OpenID Federation discovery). */
+//
+// The Trust Anchor's keys are the ones configured in trustAnchor.jwks and stay
+// fixed: keys its Entity Configuration newly advertises are not trusted for
+// anything. Moving to a new key takes an explicit re-pin (aaf init --pin).
 export async function discoverFederation(trustAnchor) {
   const taConfig = verifyEntityStatement(await getText(`${trustAnchor.url}${WELL_KNOWN}`), trustAnchor.jwks, { iss: trustAnchor.entity_id, sub: trustAnchor.entity_id });
   const members = await getJson(`${trustAnchor.url}/list`);
   const doc = {
     federation: taConfig.metadata.federation_entity.organization_name,
-    trust_anchor: { entity_id: trustAnchor.entity_id, url: trustAnchor.url, jwks: taConfig.jwks },
+    trust_anchor: { entity_id: trustAnchor.entity_id, url: trustAnchor.url, jwks: trustAnchor.jwks },
     policies: taConfig.metadata.aaf_trust_anchor.policies,
     trust_mark_issuers: taConfig.trust_mark_issuers ?? {},
     registries: [],
@@ -66,7 +70,7 @@ export async function discoverFederation(trustAnchor) {
   };
   await Promise.all(
     members.map(async (sub) => {
-      const st = verifyEntityStatement(await getText(`${trustAnchor.url}/fetch?sub=${encodeURIComponent(sub)}`), taConfig.jwks, { iss: trustAnchor.entity_id, sub });
+      const st = verifyEntityStatement(await getText(`${trustAnchor.url}/fetch?sub=${encodeURIComponent(sub)}`), trustAnchor.jwks, { iss: trustAnchor.entity_id, sub });
       const [type, md] = Object.entries(st.metadata).find(([k]) => k.startsWith('aaf_'));
       const entry = { id: sub, name: md.organization_name, jwks: md.jwks ?? st.jwks, chain: 'subordinate-statement' };
       if (md.endpoint_base) {
@@ -92,20 +96,39 @@ export async function discoverFederation(trustAnchor) {
 }
 
 /**
- * Bootstrap from a trust anchor's URL: fetch its Entity Configuration over HTTPS
- * and accept the keys it is self-signed with (trust on first use), or require
- * a known key thumbprint with pin.
+ * Bootstrap from a trust anchor's URL (where it is served; its entity
+ * identifier may differ, as in the local simulation).
+ *
+ * With pin (an RFC 7638 key thumbprint), the Entity Configuration must be
+ * signed by the advertised key whose computed thumbprint equals the pin; that
+ * key alone becomes the trusted key. A pinned key that is merely listed while
+ * another key signs is refused.
+ *
+ * Without pin, this is trust on first use: the key that actually signed the
+ * Entity Configuration is accepted, and its thumbprint is returned so a person
+ * can compare it with one published out of band.
+ *
+ * With entityId, iss and sub must equal it (entity_id_checked: true). Without
+ * it, the self-asserted iss is used as the entity identifier and
+ * entity_id_checked is false: it was not independently checked.
  */
-export async function fetchTrustAnchor(url, { pin } = {}) {
+export async function fetchTrustAnchor(url, { pin, entityId } = {}) {
   const base = url.replace(/\/$/, '');
   const res = await fetch(`${base}${WELL_KNOWN}`, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`could not fetch ${base}${WELL_KNOWN} (${res.status})`);
   const jwt = await res.text();
-  const unverified = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString('utf8'));
-  const ec = verifyEntityStatement(jwt, unverified.jwks, { iss: unverified.iss, sub: unverified.iss });
-  const kid = thumbprint(ec.jwks.keys[0]);
-  if (pin && pin !== kid) throw new Error(`trust anchor key ${kid} does not match the pinned ${pin}`);
-  return { entity_id: ec.iss, name: ec.metadata.federation_entity.organization_name, url: base, jwks: ec.jwks, thumbprint: kid };
+  const { header, payload: unverified } = decodeJws(jwt);
+  const signingKeys = (unverified.jwks?.keys ?? []).filter((k) => k.use !== 'enc' && k.kty === 'OKP');
+  const key = pin
+    ? signingKeys.find((k) => thumbprint(k) === pin)
+    : signingKeys.find((k) => thumbprint(k) === header.kid);
+  if (!key) throw new Error(pin ? `trust anchor does not advertise a key with the pinned thumbprint ${pin}` : 'trust anchor entity configuration is not signed with a key it advertises');
+  const kid = thumbprint(key);
+  const jwks = { keys: [{ ...key, kid }] };
+  // Throws unless the pinned (or first-use) key itself signed it.
+  const ec = verifyEntityStatement(jwt, jwks, entityId ? { iss: entityId, sub: entityId } : {});
+  if (ec.sub !== ec.iss) throw new Error(`trust anchor entity configuration is about ${ec.sub}, not its issuer ${ec.iss}`);
+  return { entity_id: ec.iss, name: ec.metadata.federation_entity.organization_name, url: base, jwks, thumbprint: kid, entity_id_checked: Boolean(entityId) };
 }
 
 /** Discover the federation, retrying while the trust anchor starts. */

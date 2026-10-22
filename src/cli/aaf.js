@@ -132,12 +132,14 @@ const commands = {
     if (flags.local) {
       trustAnchor = loadTrustAnchor();
     } else {
-      const url = positional[0] ?? fail('usage: aaf init <trust-anchor-url> [--pin <key thumbprint>]   or   aaf init --local');
-      // Trust on first use, over HTTPS (or a pinned key thumbprint).
-      const { thumbprint: kid, ...anchor } = await fetchTrustAnchor(url, { pin: flags.pin });
+      const url = positional[0] ?? fail('usage: aaf init <trust-anchor-url> [--pin <key thumbprint>] [--entity-id <trust anchor entity id>]   or   aaf init --local');
+      // Trust on first use, over HTTPS (or a pinned key thumbprint). Running init again with a new pin is an explicit re-pin.
+      if (flags.pin === true || flags['entity-id'] === true) fail('--pin and --entity-id each need a value');
+      const { thumbprint: kid, ...anchor } = await fetchTrustAnchor(url, { pin: flags.pin, entityId: flags['entity-id'] });
       trustAnchor = anchor;
       console.log(`Trust anchor key: ${kid}`);
       if (!flags.pin) console.log('Compare it with the key your operator published before relying on this federation.');
+      if (!anchor.entity_id_checked) console.log(`Trust anchor entity identifier ${anchor.entity_id} is as the trust anchor states it; pass --entity-id to check it.`);
     }
     const trust = await discoverFederation(trustAnchor);
     writeJson(file('config.json'), { trust_anchor: trustAnchor });

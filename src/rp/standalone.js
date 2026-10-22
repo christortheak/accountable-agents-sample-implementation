@@ -46,7 +46,7 @@ async function trustAnchorFrom(config) {
   const deadline = Date.now() + Number(process.env.AAF_STARTUP_TIMEOUT_SECONDS ?? 15) * 1000;
   for (;;) {
     try {
-      return await fetchTrustAnchor(config.trustAnchor.url, { pin: config.trustAnchor.pin });
+      return await fetchTrustAnchor(config.trustAnchor.url, { pin: config.trustAnchor.pin ?? undefined, entityId: config.trustAnchor.entityId ?? undefined });
     } catch (err) {
       if (Date.now() > deadline) throw err;
       await new Promise((r) => setTimeout(r, 1000));
