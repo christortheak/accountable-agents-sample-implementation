@@ -174,12 +174,23 @@ export async function verifyRequest({ method, url, headers, body, resolveKey, ma
   const sigB64 = sigs[chosen].replace(/^:|:$/g, '');
   const ok = crypto.verify(null, Buffer.from(base, 'utf8'), crypto.createPublicKey({ key: publicOf(jwk), format: 'jwk' }), Buffer.from(sigB64, 'base64'));
   if (!ok) throw new SignatureError('bad_signature', 'HTTP message signature verification failed');
-  if (replay) {
-    const id = `${keyid}|${params.nonce}`;
-    if (!params.nonce) throw new SignatureError('missing_nonce', 'signature must carry a nonce');
-    if (replay.has(id)) throw new SignatureError('replayed_request', 'nonce already used');
-    replay.set(id, now + maxAgeSeconds);
-    if (replay.size > 20000) for (const [k, exp] of replay) if (exp < now) replay.delete(k);
-  }
-  return { keyid, jwk, thumbprint: thumbprint(jwk), params, components };
+  const verified = { keyid, jwk, thumbprint: thumbprint(jwk), params, components };
+  if (replay) consumeNonce(replay, verified, maxAgeSeconds);
+  return verified;
+}
+
+/**
+ * Record a verified signature's nonce in a replay cache. The replay identity is
+ * the verifying key's thumbprint, not the keyid spelling. Callers that check
+ * more than the signature (e.g. key binding) call this only after every check
+ * has passed, so a rejected request never consumes a nonce.
+ */
+export function consumeNonce(replay, { thumbprint: jkt, params }, maxAgeSeconds = 120) {
+  if (!params.nonce) throw new SignatureError('missing_nonce', 'signature must carry a nonce');
+  const id = `${jkt}|${params.nonce}`;
+  const now = nowSeconds();
+  if (replay.has(id)) throw new SignatureError('replayed_request', 'nonce already used');
+  // Keep the entry until the signature's creation time leaves the accepted window.
+  replay.set(id, Math.max(now, typeof params.created === 'number' ? params.created : now) + maxAgeSeconds);
+  if (replay.size > 20000) for (const [k, exp] of replay) if (exp < now) replay.delete(k);
 }

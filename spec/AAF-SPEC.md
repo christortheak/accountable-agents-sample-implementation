@@ -190,7 +190,7 @@ Credential types are named under the trust anchor: `https://federation.aaf.test/
 
 ### 4.2 Selective disclosure and key binding
 
-Credentials use IETF SD-JWT. Each selectively disclosable value is replaced by the digest of a salted disclosure. Holders drop disclosures they do not want to reveal and append a Key Binding JWT `{iat, aud, nonce, sd_hash}` signed with the credential's `cnf` key. Verifiers MUST reject unreferenced or duplicate disclosures, and MUST require a valid KB-JWT for holder-bound credentials.
+Credentials use IETF SD-JWT. Each selectively disclosable value is replaced by the digest of a salted disclosure. Holders drop disclosures they do not want to reveal and append a Key Binding JWT `{iat, aud, nonce, sd_hash}` signed with the credential's `cnf` key. Verifiers MUST reject unreferenced or duplicate disclosures, and MUST require a valid KB-JWT for holder-bound credentials. The KB-JWT `iat` MUST be an integer NumericDate within the verifier's freshness window; a missing, non-numeric or fractional `iat` is invalid.
 
 **Rule (non-negotiable):** only grants of capability may be selectively disclosable. Hiding a permission can only understate what an agent may do. Prohibitions and every constraint inside an `authorization_details` entry MUST always be visible whenever the entry is visible.
 
@@ -203,7 +203,7 @@ Every authenticated call is signed with RFC 9421 HTTP Message Signatures (`alg="
 | principal/agent/verifier/registry/RP → registry or RK | `@method` `@target-uri` `content-digest` `content-type` | `aaf-request` | `principal:<id>`, `registration:<id>`, `verifier:<entity>`, `registry:<entity>`, or `jkt:<thumbprint>` with the key in the body as `signer_jwk` |
 | agent → relying party | the above plus `aaf-presentation` | `aaf-agent` | `cnf:<thumbprint of the credential's cnf key>` |
 
-`created` MUST be within ±120 s (60 s for agent requests). `nonce` MUST be unique per key (services keep replay caches). The covered `@target-uri` binds a signature to one service and endpoint. For agent requests, the signature `nonce` is also the KB-JWT `nonce`.
+`created` MUST be within ±120 s (60 s for agent requests). `nonce` MUST be unique per key (services keep replay caches). The replay identity is the thumbprint of the key that verified the signature, not the `keyid` spelling, and a request consumes its nonce only after every check on it has passed. The covered `@target-uri` binds a signature to one service and endpoint. For agent requests, the signature `nonce` is also the KB-JWT `nonce`.
 
 ### 4.4 Encryption
 
@@ -540,7 +540,7 @@ An agent MUST use a presentation key that differs from its long-term key: one pe
 
 0. **Nothing presented** → `UNLABELED`. A bare `AAF-Claim` header → `UNSUPPORTED`.
 1. **Accountability credential**: issuer is a federation registry (§6.1); SD-JWT VC signature valid; `vct` = accountability; `aud` = RP; unexpired. Failure → `UNSUPPORTED`.
-2. **Holder**: RFC 9421 signature valid with `keyid` = the credential's `cnf` thumbprint, covering the required components; fresh; nonce unseen. KB-JWT valid with `aud` = RP and `nonce` = signature nonce. Failure → `UNSUPPORTED` (intercepted or replayed credentials).
+2. **Holder**: RFC 9421 signature valid with `keyid` = the credential's `cnf` thumbprint, covering the required components; fresh; nonce unseen. The `keyid` only selects the key: the key that verifies the signature MUST be the `cnf` key, so a self-presented `jkt:` key is never accepted here. KB-JWT valid with `aud` = RP and `nonce` = signature nonce. Failure → `UNSUPPORTED` (intercepted or replayed credentials).
 3. **Status**: fetch the registry's status list (fresh when the policy tier requires live status, otherwise within `ttl`). `INVALID`, `SUSPENDED` or `TRANSFERRED` → `REVOKED`. List unavailable → `LOOKUP_FAILED`.
 4. **Authorization credential**: issuer is a federation record keeper holding the issuing registry's trust mark for `authorization` (§6.4); SD-JWT VC + KB-JWT valid; `vct` = authorization; `act.sub` = the PPID; same `cnf`; `aud` = RP; unexpired; status list `VALID`.
 5. **Approval** (if carried): keeper accredited; `vct` = approval; `sub` = PPID; `action` and `subject_digest` match; unexpired; status list `VALID`.

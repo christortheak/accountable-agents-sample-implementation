@@ -5,7 +5,7 @@
 //   - the evidence (status list tokens etc.) the relying party should keep.
 import { verifyJws, decodeJws, thumbprint, nowSeconds, b64u } from '../lib/crypto.js';
 import { verifySdJwt } from '../lib/sd-jwt.js';
-import { verifyRequest } from '../lib/httpsig.js';
+import { verifyRequest, consumeNonce, SignatureError } from '../lib/httpsig.js';
 import { evaluate } from '../lib/scope.js';
 import { HEADERS, CLASSIFICATION as C } from '../lib/protocol.js';
 import { SD_JWT_VC_TYP, vct, AGENT_SIGNATURE_TAG, AGENT_SIGNED_COMPONENTS } from '../lib/credentials.js';
@@ -124,14 +124,19 @@ export function createVerifier({ rpId, trust }) {
     if (!check('credential unexpired', att.exp > nowSeconds())) return fail(C.UNSUPPORTED, 'credential expired');
 
     // 2. The request is signed (RFC 9421) by the credential's cnf key, and the
-    //    Key Binding JWT ties the presentation to this audience and nonce.
+    //    Key Binding JWT ties the presentation to this audience and nonce. The
+    //    keyid only selects a key: the key that actually verified the signature
+    //    must be the cnf key. The nonce is consumed only once everything holds.
     let sig;
     try {
+      const cnfKeyid = `cnf:${thumbprint(att.cnf.jwk)}`;
       sig = await verifyRequest({
-        method, url, headers, body: rawBody, tag: AGENT_SIGNATURE_TAG, required: AGENT_SIGNED_COMPONENTS, replay, maxAgeSeconds: KB_MAX_AGE_SECONDS,
-        resolveKey: (keyid) => (keyid === `cnf:${thumbprint(att.cnf.jwk)}` ? att.cnf.jwk : null),
+        method, url, headers, body: rawBody, tag: AGENT_SIGNATURE_TAG, required: AGENT_SIGNED_COMPONENTS, maxAgeSeconds: KB_MAX_AGE_SECONDS,
+        resolveKey: (keyid) => (keyid === cnfKeyid ? att.cnf.jwk : null),
       });
+      if (sig.keyid !== cnfKeyid || sig.thumbprint !== thumbprint(att.cnf.jwk)) throw new SignatureError('wrong_key', "request not signed by the credential's cnf key");
       verifySdJwt(presentation.accountability, registryKey, { typ: SD_JWT_VC_TYP, keyBinding: { aud: rpId, nonce: sig.params.nonce, maxAgeSeconds: KB_MAX_AGE_SECONDS } });
+      consumeNonce(replay, sig, KB_MAX_AGE_SECONDS);
       check('request signed by the credential holder (RFC 9421 + key binding)', true, 'covers method, URL, body and presentation');
     } catch (err) {
       check('request signed by the credential holder (RFC 9421 + key binding)', false, err.message);
