@@ -103,3 +103,32 @@ test('an explicit re-pin to the replacement key is accepted', async () => {
   // The old pin no longer matches.
   await assert.rejects(fetchTrustAnchor(url, { pin: legit.kid }), /pinned thumbprint/);
 });
+
+test('trust on first use keeps an advertised opaque kid and still verifies with that key', async () => {
+  const opaque = { ...legit.publicJwk, kid: 'anchor-2026', use: 'sig' };
+  const decoy = { ...attacker.publicJwk, kid: 'decoy', use: 'sig' };
+  const signed = (signer, kid) => () => signJws({ iss: TA_ID, sub: TA_ID, iat: 0, exp: 4e9, jwks: { keys: [decoy, opaque] }, metadata }, signer, { typ: ENTITY_STATEMENT_TYP, kid });
+  state = { ec: signed(legit, 'anchor-2026') };
+  const anchor = await fetchTrustAnchor(url);
+  assert.equal(anchor.thumbprint, legit.kid);
+  assert.deepEqual(anchor.jwks.keys.map((k) => k.kid), ['anchor-2026']);
+  // The header names one key but another signed: refused.
+  state = { ec: signed(attacker, 'anchor-2026') };
+  await assert.rejects(fetchTrustAnchor(url), /signature/);
+  // A pin still goes by computed thumbprint, whatever the kid says.
+  state = { ec: signed(legit, 'anchor-2026') };
+  assert.equal((await fetchTrustAnchor(url, { pin: legit.kid })).thumbprint, legit.kid);
+});
+
+test('an empty or wrong-type pin or entity identifier is refused, not treated as absent', async () => {
+  state = { ec: anchorEc(legit, [legit]) };
+  for (const pin of ['', '  ', null, true, 42]) await assert.rejects(fetchTrustAnchor(url, { pin }), /pin must be/);
+  for (const entityId of ['', null, true, 'not a url', ` ${TA_ID}`]) await assert.rejects(fetchTrustAnchor(url, { pin: legit.kid, entityId }), /entityId must be/);
+});
+
+test('a self-asserted identity must be a meaningful iss equal to sub', async () => {
+  for (const extra of [{ iss: '', sub: '' }, { iss: 'anchor', sub: 'anchor' }, { iss: 7, sub: 7 }]) {
+    state = { ec: anchorEc(legit, [legit], { extra }) };
+    await assert.rejects(fetchTrustAnchor(url, { pin: legit.kid }), /no usable iss/);
+  }
+});

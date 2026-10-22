@@ -33,7 +33,7 @@ How the pin is checked: the trust anchor's Entity Configuration must be signed b
 
 Add `--entity-id <id>` if your operator gave you the trust anchor's entity identifier; the command then stops unless the Entity Configuration's `iss` and `sub` both equal it. The URL you pass is where the trust anchor is served and may differ from its entity identifier. Without `--entity-id`, the identifier is taken as the trust anchor states it, and the command says it was not checked.
 
-Without `--pin`, `aaf init` trusts on first use: it accepts the key that signed the Entity Configuration and prints its thumbprint for you to compare with the one your operator published.
+Without `--pin`, `aaf init` trusts on first use: it selects the advertised key named by the signature's `kid` (keeping that `kid`), checks the signature with it, and prints the key's thumbprint for you to compare with the one your operator published. `--pin` or `--entity-id` given with an empty value is an error, not a fall-back to trust on first use. The trust anchor's `iss` must be an absolute URL and equal its `sub`.
 
 If the operator replaces the trust anchor's key, later commands fail until you re-pin explicitly by running `aaf init <url> --pin <new thumbprint>` again with the new thumbprint they send you.
 

@@ -104,32 +104,44 @@ export async function discoverFederation(trustAnchor) {
  * key alone becomes the trusted key. A pinned key that is merely listed while
  * another key signs is refused.
  *
- * Without pin, this is trust on first use: the key that actually signed the
- * Entity Configuration is accepted, and its thumbprint is returned so a person
- * can compare it with one published out of band.
+ * Without pin, this is trust on first use: the advertised signing key whose
+ * kid matches the JWS header (else the first signing key) is selected, the
+ * signature must verify with it, and it alone is kept; its computed thumbprint
+ * is returned so a person can compare it with one published out of band.
+ *
+ * pin and entityId are either omitted (undefined) or valid: an empty or
+ * non-string value is refused rather than treated as not configured. iss must
+ * be an absolute URL string and equal sub.
  *
  * With entityId, iss and sub must equal it (entity_id_checked: true). Without
  * it, the self-asserted iss is used as the entity identifier and
  * entity_id_checked is false: it was not independently checked.
  */
 export async function fetchTrustAnchor(url, { pin, entityId } = {}) {
+  // Omitted (undefined) means "not configured"; anything else must be a usable value, never a silent downgrade.
+  if (pin !== undefined && (typeof pin !== 'string' || !pin.trim())) throw new Error('pin must be a non-empty key thumbprint string');
+  if (entityId !== undefined && !isEntityId(entityId)) throw new Error('entityId must be an absolute URL string');
   const base = url.replace(/\/$/, '');
   const res = await fetch(`${base}${WELL_KNOWN}`, { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`could not fetch ${base}${WELL_KNOWN} (${res.status})`);
   const jwt = await res.text();
   const { header, payload: unverified } = decodeJws(jwt);
   const signingKeys = (unverified.jwks?.keys ?? []).filter((k) => k.use !== 'enc' && k.kty === 'OKP');
-  const key = pin
+  // Pinned: by computed thumbprint only. First use: by advertised kid, as verifyEntityStatement selects keys.
+  const key = pin !== undefined
     ? signingKeys.find((k) => thumbprint(k) === pin)
-    : signingKeys.find((k) => thumbprint(k) === header.kid);
-  if (!key) throw new Error(pin ? `trust anchor does not advertise a key with the pinned thumbprint ${pin}` : 'trust anchor entity configuration is not signed with a key it advertises');
+    : signingKeys.find((k) => k.kid === header.kid) ?? signingKeys[0];
+  if (!key) throw new Error(pin !== undefined ? `trust anchor does not advertise a key with the pinned thumbprint ${pin}` : 'trust anchor entity configuration advertises no signing key');
   const kid = thumbprint(key);
-  const jwks = { keys: [{ ...key, kid }] };
-  // Throws unless the pinned (or first-use) key itself signed it.
-  const ec = verifyEntityStatement(jwt, jwks, entityId ? { iss: entityId, sub: entityId } : {});
+  const jwks = { keys: [{ ...key, kid: key.kid ?? kid }] };
+  // Throws unless that one selected key itself signed it.
+  const ec = verifyEntityStatement(jwt, jwks, entityId !== undefined ? { iss: entityId, sub: entityId } : {});
+  if (!isEntityId(ec.iss)) throw new Error('trust anchor entity configuration has no usable iss');
   if (ec.sub !== ec.iss) throw new Error(`trust anchor entity configuration is about ${ec.sub}, not its issuer ${ec.iss}`);
-  return { entity_id: ec.iss, name: ec.metadata.federation_entity.organization_name, url: base, jwks, thumbprint: kid, entity_id_checked: Boolean(entityId) };
+  return { entity_id: ec.iss, name: ec.metadata.federation_entity.organization_name, url: base, jwks, thumbprint: kid, entity_id_checked: entityId !== undefined };
 }
+
+const isEntityId = (v) => typeof v === 'string' && v.trim() === v && URL.canParse(v);
 
 /** Discover the federation, retrying while the trust anchor starts. */
 export async function discoverWithRetry(trustAnchor, timeoutMs = STARTUP_TIMEOUT_MS) {
