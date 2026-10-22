@@ -126,7 +126,7 @@ export function createVerifier({ rpId, trust }) {
     // 2. The request is signed (RFC 9421) by the credential's cnf key, and the
     //    Key Binding JWT ties the presentation to this audience and nonce. The
     //    keyid only selects a key: the key that actually verified the signature
-    //    must be the cnf key. The nonce is consumed only once everything holds.
+    //    must be the cnf key. The nonce is consumed once the holder is authenticated.
     let sig;
     try {
       const cnfKeyid = `cnf:${thumbprint(att.cnf.jwk)}`;

@@ -181,9 +181,9 @@ export async function verifyRequest({ method, url, headers, body, resolveKey, ma
 
 /**
  * Record a verified signature's nonce in a replay cache. The replay identity is
- * the verifying key's thumbprint, not the keyid spelling. Callers that check
- * more than the signature (e.g. key binding) call this only after every check
- * has passed, so a rejected request never consumes a nonce.
+ * the verifying key's thumbprint, not the keyid spelling. Callers that also
+ * authenticate the holder (e.g. key binding) call this once those checks have
+ * passed, so a request that fails authentication never consumes a nonce.
  */
 export function consumeNonce(replay, { thumbprint: jkt, params }, maxAgeSeconds = 120) {
   if (!params.nonce) throw new SignatureError('missing_nonce', 'signature must carry a nonce');

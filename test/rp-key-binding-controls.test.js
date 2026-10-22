@@ -115,16 +115,16 @@ test('RP failed key binding does not consume the nonce', async () => {
   assert.ok(accepted(await send(w, agentRequest(w, { nonce }))));
 });
 
-test('RP requires a finite integer KB-JWT iat within the freshness window', async () => {
+test('RP requires a finite numeric KB-JWT iat within the freshness window', async () => {
   const w = world();
   const now = nowSeconds();
-  const bad = [undefined, null, String(now), now + 0.5, 'NaN', [now], { t: now }, now - 120, now + 120, 1e308];
+  const bad = [undefined, null, String(now), 'NaN', true, [now], { t: now }, now - 120, now + 120, now - 60.5, 1e308, -1e308];
   for (const iat of bad) {
     const nonce = `n_iat${Math.random().toString(36).slice(2, 12)}`;
     const out = await send(w, agentRequest(w, { nonce, kb: { raw: kbWithIat(w, nonce, iat) } }));
     rejected(out, /does not hold/);
   }
-  for (const iat of [now - 55, now + 55]) {
+  for (const iat of [now - 55, now + 55, now - 0.5, now + 0.25, now - 30.5]) {
     const nonce = `n_iat${Math.random().toString(36).slice(2, 12)}`;
     assert.ok(accepted(await send(w, agentRequest(w, { nonce, kb: { raw: kbWithIat(w, nonce, iat) } }))), `iat ${iat - now}s`);
   }
@@ -137,10 +137,11 @@ test('SD-JWT key binding rejects missing and malformed iat', () => {
   const kb = (iat) => presented + signJws({ ...(iat !== undefined ? { iat } : {}), aud: 'rp', nonce: 'n1', sd_hash: sdHash(presented) }, holder, { typ: KB_JWT_TYP });
   const opts = { keyBinding: { aud: 'rp', nonce: 'n1' } };
   const now = nowSeconds();
-  for (const iat of [undefined, null, String(now), now + 0.25, true]) assert.throws(() => verifySdJwt(kb(iat), issuer.publicJwk, opts), /iat must be an integer/);
+  for (const iat of [undefined, null, String(now), 'NaN', true, [now], {}]) assert.throws(() => verifySdJwt(kb(iat), issuer.publicJwk, opts), /iat must be a NumericDate/);
   assert.throws(() => verifySdJwt(kb(now - 600), issuer.publicJwk, opts), /stale/);
   assert.throws(() => verifySdJwt(kb(now + 600), issuer.publicJwk, opts), /stale/);
   assert.ok(verifySdJwt(kb(now), issuer.publicJwk, opts).kb);
+  assert.ok(verifySdJwt(kb(now - 0.75), issuer.publicJwk, opts).kb, 'fractional NumericDate is valid');
 });
 
 test('service self-presented jkt signing still works; replay is keyed by the verified key', async () => {
