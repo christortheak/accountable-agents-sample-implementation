@@ -23,22 +23,36 @@ export function allocateIndex(used) {
   }
 }
 
+// Bits per entry the Token Status List defines; any of them can be read.
+export const SUPPORTED_BITS = [1, 2, 4, 8];
+
+/** An index must be a safe non-negative integer below the list's entry count; nothing is coerced. */
+function checkIndex(idx, entries) {
+  if (!Number.isSafeInteger(idx) || idx < 0 || idx >= entries) throw new Error('status index out of range');
+}
+
 /** values: Map idx -> status code. Returns the status_list claim { bits, lst }. */
 export function encodeStatusList(values, size = LIST_SIZE) {
+  if (!Number.isSafeInteger(size) || size <= 0 || (size * BITS) % 8 !== 0) throw new Error(`status list size must be a positive multiple of ${8 / BITS}`);
   const bytes = Buffer.alloc((size * BITS) / 8);
   for (const [idx, status] of values) {
+    checkIndex(idx, size);
+    if (!Number.isInteger(status) || status < 0 || status >= 1 << BITS) throw new Error(`status code must be an integer from 0 to ${(1 << BITS) - 1}`);
     if (!status) continue;
+    // Plain arithmetic: 32-bit shifts would wrap for large indices.
     const bit = idx * BITS;
-    bytes[bit >> 3] |= (status & 0b11) << (bit & 7);
+    bytes[Math.floor(bit / 8)] |= status << (bit % 8);
   }
   return { bits: BITS, lst: b64u.encode(zlib.deflateSync(bytes)) };
 }
 
 export function statusAt(statusList, idx) {
+  const { bits } = statusList;
+  if (!SUPPORTED_BITS.includes(bits)) throw new Error(`unsupported status list bits ${bits}`);
   const bytes = zlib.inflateSync(b64u.decode(statusList.lst));
-  const bit = idx * statusList.bits;
-  if ((bit >> 3) >= bytes.length) throw new Error('status index out of range');
-  return (bytes[bit >> 3] >> (bit & 7)) & ((1 << statusList.bits) - 1);
+  checkIndex(idx, (bytes.length * 8) / bits);
+  const bit = idx * bits;
+  return (bytes[Math.floor(bit / 8)] >> (bit % 8)) & ((1 << bits) - 1);
 }
 
 export function statusListToken({ issuer, key, uri, values, ttl }) {
