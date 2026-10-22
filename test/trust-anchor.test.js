@@ -132,3 +132,21 @@ test('a self-asserted identity must be a meaningful iss equal to sub', async () 
     await assert.rejects(fetchTrustAnchor(url, { pin: legit.kid }), /no usable iss/);
   }
 });
+
+test('the standalone relying party passes its trust anchor config through: null pin is first use, null entityId is refused', async () => {
+  const { trustAnchorFrom } = await import('../src/rp/standalone.js');
+  const prev = process.env.AAF_STARTUP_TIMEOUT_SECONDS;
+  process.env.AAF_STARTUP_TIMEOUT_SECONDS = '0';
+  try {
+    state = { ec: anchorEc(legit, [legit]) };
+    const tofu = await trustAnchorFrom({ trustAnchor: { url, pin: null } });
+    assert.equal(tofu.entity_id_checked, false);
+    const checked = await trustAnchorFrom({ trustAnchor: { url, pin: legit.kid, entityId: TA_ID } });
+    assert.equal(checked.entity_id_checked, true);
+    await assert.rejects(trustAnchorFrom({ trustAnchor: { url, pin: legit.kid, entityId: null } }), /entityId must be/);
+    await assert.rejects(trustAnchorFrom({ trustAnchor: { url, pin: '' } }), /pin must be/);
+  } finally {
+    if (prev === undefined) delete process.env.AAF_STARTUP_TIMEOUT_SECONDS;
+    else process.env.AAF_STARTUP_TIMEOUT_SECONDS = prev;
+  }
+});

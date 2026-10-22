@@ -112,7 +112,7 @@ Send both to participants through a channel they already trust, together with [P
 aaf init https://federation.example.org --pin <thumbprint>
 ```
 
-Participants may also pass `--entity-id <trust anchor entity id>` to check the identifier (the `trustAnchor.id` in your federation config). A standalone relying party takes the same settings in its config: `"trustAnchor": { "url": …, "pin": "<thumbprint>", "entityId": "<id>" }`; with `pin` null or omitted it trusts on first use; an empty-string or non-string `pin` or `entityId` stops startup instead.
+Participants may also pass `--entity-id <trust anchor entity id>` to check the identifier (the `trustAnchor.id` in your federation config). A standalone relying party takes the same settings in its config: `"trustAnchor": { "url": …, "pin": "<thumbprint>", "entityId": "<id>" }`; with `pin` null or omitted it trusts on first use, and with `entityId` omitted the identifier is not checked. Any other non-string or empty `pin`, and an `entityId` that is present but not an absolute URL string (including null), stops startup instead.
 
 The pinned key stays the only trusted trust anchor key; newly advertised keys are not picked up. If you replace the trust anchor's key, send participants the new thumbprint: each re-pins with `aaf init … --pin <new>` (and relying parties update `pin` and restart).
 
