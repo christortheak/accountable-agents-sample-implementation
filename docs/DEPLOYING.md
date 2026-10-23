@@ -112,6 +112,14 @@ Send both to participants through a channel they already trust, together with [P
 aaf init https://federation.example.org --pin <thumbprint>
 ```
 
+Participants may also pass `--entity-id <trust anchor entity id>` to check the identifier (the `trustAnchor.id` in your federation config). A standalone relying party takes the same settings in its config: `"trustAnchor": { "url": …, "pin": "<thumbprint>", "entityId": "<id>" }`; with `pin` null or omitted it trusts on first use, and with `entityId` omitted the identifier is not checked. Any other non-string or empty `pin`, and an `entityId` that is present but not an absolute URL string (including null), stops startup instead.
+
+The pinned key stays the only trusted trust anchor key; newly advertised keys are not picked up. If you replace the trust anchor's key, send participants the new thumbprint: each re-pins with `aaf init … --pin <new>` (and relying parties update `pin` and restart).
+
+**Migration from earlier versions.** A participant's existing `~/.aaf/config.json` keeps working while the trust anchor key is unchanged, but discovery now verifies Subordinate Statements with that saved key rather than with whatever keys the trust anchor currently advertises. Re-running `aaf init <url> --pin <thumbprint>` saves just the pinned key.
+
+Other intentional compatibility changes: trust on first use now saves only the key that signed (with its advertised `kid`), not every advertised key; an empty-string `pin` in a relying-party config, previously treated as no pin, is now refused; and a trust anchor whose `iss` is not an absolute URL equal to its `sub` is refused.
+
 ## 4. Verify participants
 
 Each participant runs `aaf enroll` and sends you the `verification-request.json` file it writes. Check that the person and the claims are right, then record the verification:

@@ -41,12 +41,13 @@ function persistentKey(id) {
   return key;
 }
 
-async function trustAnchorFrom(config) {
+/** The trust anchor from config: pin null means trust on first use; entityId is passed as given, so null is refused. */
+export async function trustAnchorFrom(config) {
   if (config.trustAnchor === 'local') return loadTrustAnchor();
   const deadline = Date.now() + Number(process.env.AAF_STARTUP_TIMEOUT_SECONDS ?? 15) * 1000;
   for (;;) {
     try {
-      return await fetchTrustAnchor(config.trustAnchor.url, { pin: config.trustAnchor.pin });
+      return await fetchTrustAnchor(config.trustAnchor.url, { pin: config.trustAnchor.pin ?? undefined, entityId: config.trustAnchor.entityId });
     } catch (err) {
       if (Date.now() > deadline) throw err;
       await new Promise((r) => setTimeout(r, 1000));
