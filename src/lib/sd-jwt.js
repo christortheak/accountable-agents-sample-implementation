@@ -127,6 +127,7 @@ export function verifySdJwt(combined, issuerPublicJwk, { typ, keyBinding } = {})
     kb = verifyJws(kbJwt, payload.cnf.jwk, { typ: KB_JWT_TYP }).payload;
     if (kb.aud !== keyBinding.aud) throw new JoseError('kb_wrong_audience', 'key binding is for a different audience');
     if (keyBinding.nonce !== undefined && kb.nonce !== keyBinding.nonce) throw new JoseError('kb_wrong_nonce', 'key binding nonce does not match');
+    if (typeof kb.iat !== 'number' || !Number.isFinite(kb.iat)) throw new JoseError('kb_bad_iat', 'key binding iat must be a NumericDate');
     if (Math.abs(nowSeconds() - kb.iat) > (keyBinding.maxAgeSeconds ?? 60)) throw new JoseError('kb_stale', 'key binding is stale');
     if (kb.sd_hash !== sdHash(withoutKb)) throw new JoseError('kb_sd_hash', 'key binding does not cover these disclosures');
   }
