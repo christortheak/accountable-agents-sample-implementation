@@ -73,11 +73,12 @@ export default {
     await atlas.registerSubagent(scout, { label: 'Scout', records: world.records() });
     await atlas.delegate(scout, { permissions: [{ action: 'data.query' }], delegation: { allowed: true, max_depth: 1 } });
     await scout.registerSubagent(fetcher, { label: 'Fetcher', records: world.records() });
-    await scout.delegate(fetcher, { permissions: [{ action: 'data.query' }] });
+    // Shorter than the parent's 7 days, so a second boundary between the two delegations cannot make it outlive its parent.
+    await scout.delegate(fetcher, { permissions: [{ action: 'data.query' }], validForDays: 6 });
     await atlas.registerSubagent(courier, { label: 'Courier', records: world.records() });
     await atlas.delegate(courier, { permissions: [{ action: 'data.query' }], delegation: { allowed: true, max_depth: 1 } });
     await courier.registerSubagent(courierSub, { label: 'Courier/sub', records: world.records() });
-    await courier.delegate(courierSub, { permissions: [{ action: 'data.query' }] });
+    await courier.delegate(courierSub, { permissions: [{ action: 'data.query' }], validForDays: 6 });
     const dereg = await atlas.revokeSubagent(courier, 'principal_request');
     n.act('Atlas', `deregisters Courier → ${dereg.status}, cascading to ${dereg.cascades_to} sub-agent(s)`);
     const results = {};
