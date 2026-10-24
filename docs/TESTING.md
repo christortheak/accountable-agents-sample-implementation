@@ -44,9 +44,12 @@ The summary at the end counts the assertions per scenario. `All expectations met
 npm test
 ```
 
-This runs 17 tests:
-- **Unit tests** for the building blocks: JWS and JWE, SD-JWT with key binding, RFC 9162 Merkle proofs, RFC 8785 canonical JSON, RFC 9421 HTTP message signatures, the Token Status List, RAR authority, and WebAuthn.
+This runs 44 tests:
+- **Unit tests** for the building blocks: JWS and JWE, SD-JWT with key binding, RFC 9162 Merkle proofs, RFC 8785 canonical JSON, RFC 9421 HTTP message signatures, the Token Status List (including invalid indices and values), RAR authority, and WebAuthn.
 - **Service tests:** state survives a restart, and requests are refused when they are unverified, replayed or signed with the wrong key.
+- **Relying-party key binding:** an agent's request must be signed with its credential's own key, and replays and substituted keys are refused.
+- **Trust-anchor pinning:** a pin constrains the key that actually signed, and newly advertised keys are not trusted.
+- **Delegation:** a delegated grant never outlives the grant it comes from.
 - **Every simulator scenario**, run as an integration test.
 - **The passkey demo**, driven with a simulated passkey.
 - **The pilot kit:** the HTTPS fix, the `aaf` command-line tool end to end, and the standalone relying party.

@@ -101,7 +101,7 @@ aaf agent register worker --parent helper --expires-in 3600
 aaf delegate helper worker compute.provision --max-units 4:gpu-hour
 ```
 
-The worker lapses after an hour, can't outlive its parent, and can only ever be given less authority than its parent has.
+The worker lapses after an hour, can't outlive its parent, and can only ever be given less authority than its parent has. Its grant lasts seven days unless you pass `--days`, and never past the end of the grant it comes from. Asking for longer is refused.
 
 | Command | What it does |
 |---|---|

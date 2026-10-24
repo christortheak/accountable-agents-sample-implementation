@@ -246,11 +246,13 @@ const commands = {
 
   async delegate({ positional, flags }) {
     const [parentName, childName, action] = positional;
-    if (!parentName || !childName || !action) fail('usage: aaf delegate <parent-agent> <child-agent> <action> [constraint flags] [--delegable <depth>] [--days 7]');
+    if (!parentName || !childName || !action) fail('usage: aaf delegate <parent-agent> <child-agent> <action> [constraint flags] [--delegable <depth>] [--days <n>]   (default: 7 days, or until the parent grant ends if sooner)');
+    const days = flags.days === undefined ? undefined : Number(flags.days);
+    if (flags.days === true || (days !== undefined && !(days > 0))) fail('--days must be a positive number of days');
     const { trust } = await federation();
     const parent = loadAgent(trust, parentName);
     const child = loadAgent(trust, childName);
-    const res = await parent.delegate(child, { permissions: [{ action, constraints: constraintsFrom(flags) }], delegation: delegationFrom(flags), validForDays: Number(flags.days ?? 7) });
+    const res = await parent.delegate(child, { permissions: [{ action, constraints: constraintsFrom(flags) }], delegation: delegationFrom(flags), validForDays: days });
     saveAgent(child);
     console.log(`${parentName} delegated ${action} to ${childName} (grant ${res.grant_id}).`);
   },
