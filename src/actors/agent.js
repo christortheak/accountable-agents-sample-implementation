@@ -235,9 +235,11 @@ export class Agent {
   }
 
   /** Delegate part of this agent's authority to a sub-agent. The record keeper enforces that it only narrows. */
-  async delegate(child, { permissions, prohibitions = [], delegation = { allowed: false, max_depth: 0 }, validForDays = 7, purpose, grantId }) {
+  async delegate(child, { permissions, prohibitions = [], delegation = { allowed: false, max_depth: 0 }, validForDays, purpose, grantId }) {
     const parentGrant = grantId ? this.grants.find((g) => g.grantId === grantId) : this.grants[0];
+    if (!parentGrant) throw new Error(grantId ? `no grant ${grantId} to delegate from` : 'this agent holds no grant to delegate from');
     const now = nowSeconds();
+    const exp = delegatedGrantExpiry({ now, parentExp: decodeJws(parentGrant.grant).payload.exp, validForDays });
     const grant = signJws(
       {
         iss: `agent:${this.registrationId}@${this.registry.id}`,
@@ -246,7 +248,7 @@ export class Agent {
         agent_key: child.longTermKey.kid,
         iat: now,
         nbf: now,
-        exp: now + validForDays * 86400,
+        exp,
         jti: randomId('grt', 12),
         authorization_details: permissions.map(toRar),
         prohibitions: prohibitions.map(toRar),
@@ -269,6 +271,29 @@ export class Agent {
     const ctx = await this.contextFor(child.registry.id, { mode: 'pairwise' });
     return postSigned(`${child.registry.url}/v1/registrations/${child.registrationId}/revoke`, { reason }, ctx.key, { embedJwk: true });
   }
+}
+
+/** How long a delegated grant lasts when no length is requested. */
+export const DEFAULT_DELEGATION_DAYS = 7;
+
+/**
+ * The expiry (seconds) of a grant delegated under a parent grant that expires
+ * at parentExp. With no requested length, the default is cut to the parent's
+ * expiry, as a sub-agent's registration is cut to its parent's lifetime. A
+ * requested length that would outlive the parent is refused here, naming the
+ * parent's expiry; the record keeper refuses it as well (spec §11.3).
+ */
+export function delegatedGrantExpiry({ now, parentExp, validForDays }) {
+  if (validForDays == null) {
+    const exp = now + DEFAULT_DELEGATION_DAYS * 86400;
+    return parentExp != null ? Math.min(exp, parentExp) : exp;
+  }
+  if (typeof validForDays !== 'number' || !(validForDays > 0) || !Number.isFinite(validForDays)) throw new Error('validForDays must be a positive number of days');
+  const exp = now + validForDays * 86400;
+  if (parentExp != null && exp > parentExp) {
+    throw new Error(`a ${validForDays}-day grant would outlive its parent grant, which expires ${new Date(parentExp * 1000).toISOString()}`);
+  }
+  return exp;
 }
 
 /** Decode a presented SD-JWT's issuer-signed part without verifying (for display). */

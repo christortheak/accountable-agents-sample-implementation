@@ -619,6 +619,8 @@ If a prohibition matches → not permitted. Otherwise the request is permitted i
 
 A delegated grant is accepted only if the parent allows delegation with depth remaining, the child expires no later, every child entry is covered by a parent entry (same type, actions a subset, constraints at least as strict), no child entry falls under a parent prohibition, and every constraint is a known type. Prohibitions are inherited. RPs see the delegation depth through nested `act`.
 
+A delegating agent SHOULD choose the child's expiry so that this holds. With no requested length, the default (seven days in the reference implementation) is cut to the parent grant's expiry, as a sub-agent's registration is cut to its parent's lifetime (§7.5). A requested length that would outlive the parent grant is refused before the grant is sent.
+
 ---
 
 ## 12. Privacy considerations
