@@ -16,10 +16,14 @@ import { createNarrator } from './narrator.js';
 import { createWorld } from './world.js';
 import { scenarios } from './scenarios/index.js';
 
-export async function runSimulation({ selected = [], fresh = false, quiet = false, reportFile = path.join(PROJECT_ROOT, 'reports', 'simulation-report.md') } = {}) {
+/** @param {object} [opts.federation] a federation already started by the caller (it stays running afterwards) */
+export async function runSimulation({ selected = [], fresh = false, quiet = false, reportFile = path.join(PROJECT_ROOT, 'reports', 'simulation-report.md'), federation: given = null } = {}) {
   let federation;
   let mode;
-  if (fresh) {
+  if (given) {
+    federation = { ...given, close: async () => {} };
+    mode = 'federation provided by the caller';
+  } else if (fresh) {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-sim-'));
     federation = await startFederationInProcess({ dataDir, portOffset: 2000 });
     mode = `throwaway federation (${dataDir})`;

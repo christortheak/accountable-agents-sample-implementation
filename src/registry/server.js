@@ -97,6 +97,10 @@ export async function startRegistry({ id, port, trustList, keys, dataDir, host =
   // Incidents and resolution -------------------------------------------------
   app.post('/v1/incidents', async (ctx) => registry.incident(await signed(ctx)));
   app.post('/v1/resolutions', async ({ body }) => registry.resolve(body ?? {}));
+  // Revocation under a legal order that carries the revoke_registration scope.
+  app.post('/v1/revocations', async ({ body }) => registry.revokeUnderOrder(body ?? {}));
+  // Published practices (also in this registry's Entity Configuration).
+  app.get('/v1/practices', () => registry.practices());
 
   app.get('/v1/accreditations', () => ({
     accreditations: [...registry.accreditations.values()].map((a) => ({ rk: a.rk, roles: a.roles, status: a.status, trust_mark_types: Object.keys(a.marks ?? {}) })),
@@ -124,7 +128,12 @@ export async function startRegistry({ id, port, trustList, keys, dataDir, host =
   });
   app.post('/admin/registrations/:id/revoke', ({ params, body, headers }) => {
     requireAdmin(headers);
-    return registry.applyRevocation(registry.mustRegistration(params.id), body.reason ?? 'legal_order', 'operator');
+    return registry.applyRevocation(registry.mustRegistration(params.id), body.reason ?? 'fraud', 'operator');
+  });
+  // Close a principal record so the same verified identity can enroll again (for example after a lost key).
+  app.post('/admin/principals/:id/close', ({ params, body, headers }) => {
+    requireAdmin(headers);
+    return registry.closePrincipal(params.id, body?.reason ?? 'operator');
   });
 
   const server = await app.listen(port, host);

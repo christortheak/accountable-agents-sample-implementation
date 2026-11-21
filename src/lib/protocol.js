@@ -8,10 +8,14 @@ export const HEADERS = {
 };
 export const RP_METADATA_PATH = '/.well-known/aaf-relying-party';
 
-/** Accountability classifications a relying party can reach (framework §5.2, §5.5). */
+/**
+ * Accountability classifications a relying party can reach. The paper's
+ * conclusion asks a pilot to tell these cases apart; a failed lookup or an
+ * unlabeled client is not treated as proof that no principal exists.
+ */
 export const CLASSIFICATION = {
-  DISCLOSED: 'ACCOUNTABLE_DISCLOSED', // verified legal person, identity disclosed by consent
-  PROTECTED: 'ACCOUNTABLE_PROTECTED', // verified legal person, identity protected but resolvable
+  DISCLOSED: 'ACCOUNTABLE_DISCLOSED', // verified principal, identity disclosed by consent
+  PROTECTED: 'ACCOUNTABLE_PROTECTED', // verified principal, identity protected but recoverable by the directory
   UNSUPPORTED: 'UNSUPPORTED', // a claim was made but could not be established
   UNLABELED: 'UNLABELED', // nothing was presented
   REVOKED: 'REVOKED', // established, but the registration is no longer active

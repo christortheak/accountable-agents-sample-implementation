@@ -17,6 +17,19 @@ const isMarked = (v) => v !== null && typeof v === 'object' && v[SD_MARK] === tr
 const newSalt = () => b64u.encode(randomBytes(16));
 const disclosureDigest = (encoded) => sha256b64u(Buffer.from(encoded, 'ascii'));
 
+const SD_PAD = Symbol('sd-decoy-padding');
+
+/**
+ * Pad an object or array with decoy digests up to `count`, so the number of
+ * digests does not reveal how many disclosable values the holder has (and so
+ * does not help link two presentations). Verifiers ignore unmatched digests.
+ */
+export const sdPad = (container, count) => {
+  Object.defineProperty(container, SD_PAD, { value: count, enumerable: false });
+  return container;
+};
+const decoyDigest = () => sha256b64u(randomBytes(32));
+
 /**
  * Issue an SD-JWT. `payload` may contain values wrapped with sd().
  * Returns the combined serialization with ALL disclosures; the holder trims it with present().
@@ -26,14 +39,18 @@ export function issueSdJwt(payload, key, { typ } = {}) {
 
   const encode = (node) => {
     if (Array.isArray(node)) {
-      return node.map((el) => {
+      let digestCount = 0;
+      const out = node.map((el) => {
         if (isMarked(el)) {
           const encoded = b64u.encodeJson([newSalt(), encode(el.value)]);
           disclosures.push(encoded);
+          digestCount += 1;
           return { '...': disclosureDigest(encoded) };
         }
         return encode(el);
       });
+      for (; digestCount < (node[SD_PAD] ?? 0); digestCount++) out.push({ '...': decoyDigest() });
+      return out;
     }
     if (node !== null && typeof node === 'object') {
       const out = {};
@@ -47,6 +64,7 @@ export function issueSdJwt(payload, key, { typ } = {}) {
           out[name] = encode(value);
         }
       }
+      while (digests.length < (node[SD_PAD] ?? 0)) digests.push(decoyDigest());
       if (digests.length) out._sd = digests.sort();
       return out;
     }

@@ -1,5 +1,5 @@
-// Scenario 6: audit and tamper evidence (paper §3.1 "Record keepers",
-// §3.2 "Audit" and "Accreditation").
+// Scenario 6: audit and tamper evidence. The paper (Section 3.5) says attribution
+// needs independently verifiable activity records beside it; this shows them.
 import { getJson, postJson } from '../../lib/http.js';
 import { verifyJws, verifySelfSignedJws } from '../../lib/crypto.js';
 import { loadKeys } from '../../lib/trust.js';

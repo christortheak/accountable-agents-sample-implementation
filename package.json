@@ -1,6 +1,6 @@
 {
   "name": "aaf-reference",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Reference implementation of the Accountable Agents Framework: registries, record keepers, and a transaction simulator.",
   "type": "module",
   "private": true,

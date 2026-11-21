@@ -50,10 +50,30 @@ test('aaf CLI and standalone relying party, end to end', { timeout: 90000 }, asy
     assert.equal(disclosed.classification, 'ACCOUNTABLE_DISCLOSED');
     const resolved = JSON.parse(await aaf('operator', 'resolve', small.ppid, '--case', 'test', '--rp', shopConfig.id));
     assert.equal(resolved.root_principal.identity.legal_name, 'Test Author');
+    // A (demonstration) legal order has the directory revoke the agent behind an ID, and the principal is told.
+    await aaf('agent', 'register', 'second');
+    await aaf('grant', 'second', 'commerce.purchase', '--max-amount', '50:USD');
+    const other = JSON.parse(await aaf('act', 'second', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":5,"currency":"USD"}}', '--json'));
+    assert.match(other.ppid, /^aaf:registry-a\.aaf\.test:p_/);
+    assert.match(await aaf('operator', 'revoke', other.ppid, '--case', 'test order'), /revoked.*test order/);
+    await assert.rejects(aaf('act', 'second', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":5,"currency":"USD"}}'), /revoked/);
+    assert.match(await aaf('notifications'), /revocation_order/);
     assert.match(await aaf('revoke', 'helper', '--reason', 'compromised'), /revoked/);
     await assert.rejects(aaf('act', 'helper', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":5,"currency":"USD"}}'), /revoked/);
     const page = await (await fetch(shop.url)).text();
     assert.match(page, /ACCOUNTABLE_DISCLOSED/);
+
+    // One verified identity, one principal record: the same person cannot be verified twice,
+    // until the operator closes the old record (the lost-key procedure).
+    const principalId = /principal (prn_\w+)/.exec(await aaf('whoami'))[1];
+    const home2 = fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-home-'));
+    const again = async (...args) => (await run(process.execPath, [path.join(ROOT, 'src/cli/aaf.js'), ...args], { env: { ...env, AAF_HOME: home2 } })).stdout;
+    await again('init', '--local');
+    await again('enroll', '--name', 'Test Author');
+    await assert.rejects(again('operator', 'verify', path.join(home2, 'verification-request.json')), /already has a principal record/);
+    const adminUrl = fed.trustList.registry('https://registry-a.aaf.test').url;
+    assert.match(await aaf('operator', 'close-principal', principalId, '--admin-url', adminUrl), /closed/);
+    assert.match(await again('operator', 'verify', path.join(home2, 'verification-request.json')), /Verified Test Author/);
   } finally {
     await shop.close();
     await fed.close();

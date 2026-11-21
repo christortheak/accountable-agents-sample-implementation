@@ -1,7 +1,7 @@
 // The simulated world shared by scenarios: the federation's services, the
 // authorities, and helpers for creating principals, agents and relying parties.
 import { loadKeys } from '../lib/trust.js';
-import { getJson } from '../lib/http.js';
+import { getJson, postJson } from '../lib/http.js';
 import { decodeJws, verifyJws } from '../lib/crypto.js';
 import { buildPresentationRequest } from '../lib/presentation.js';
 import { verifyReceipt } from '../lib/log.js';
@@ -42,7 +42,18 @@ export function createWorld({ trust, keysDir }) {
     async verifiedPrincipal({ type, identity, registry = regA, assurance, method, attributes = [], contact }) {
       const p = new Principal({ type, identity, registry, trust, contact });
       await p.enroll();
-      const v = await world.kyc.verify(p, { assurance, method, attributes });
+      let v;
+      try {
+        v = await world.kyc.verify(p, { assurance, method, attributes });
+      } catch (err) {
+        // A directory keeps one principal record per verified identity. When the
+        // simulator is run again against services that are still running, its
+        // characters already have records whose keys are gone, so the operator
+        // closes the old record (the lost-key procedure) and verifies the new one.
+        if (err.code !== 'duplicate_identity') throw err;
+        await postJson(`${registry.url}/admin/principals/${err.details.existing_principal}/close`, { reason: 'simulation rerun' }, { authorization: `Bearer ${loadKeys(registry.id, keysDir).adminToken}` });
+        v = await world.kyc.verify(p, { assurance, method, attributes });
+      }
       p.verification = v;
       return p;
     },

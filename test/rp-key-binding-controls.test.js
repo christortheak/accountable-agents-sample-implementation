@@ -34,9 +34,9 @@ function world() {
   };
   const now = nowSeconds();
   const credential = present(issueSdJwt({
-    vct: vct(TA, 'accountability'), iss: REG, sub: 'ppid:registry.example:p_holder', aud: RP, iat: now, exp: now + 600,
-    cnf: { jwk: publicOf(holder.publicJwk) }, ppid_mode: 'pairwise',
-    accountability: { status: 'accountable', root_principal: { type: 'organization', verified: true, verification: {} }, chain_length: 1, attributes: [] },
+    vct: vct(TA, 'accountability'), iss: REG, sub: 'aaf:registry.example:p_holder', aud: RP, iat: now, exp: now + 600,
+    cnf: { jwk: publicOf(holder.publicJwk) }, id_mode: 'pairwise',
+    accountability: { status: 'accountable', principal_type: 'legal_person', chain_length: 1, attributes: [] },
     status: { status_list: { idx: 7, uri: STATUS_URI } },
   }, registryKey, { typ: SD_JWT_VC_TYP }), () => true);
   return { holder, credential, verifier: createVerifier({ rpId: RP, trust }) };

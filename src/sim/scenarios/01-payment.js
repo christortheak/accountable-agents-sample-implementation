@@ -1,4 +1,5 @@
-// Scenario 1 (paper §4, Scenario 1): agentic payment in the financial sector.
+// Scenario 1: agentic payment in the financial sector. A regulated counterparty (the bank) sets
+// acceptance criteria; merchants see only an ID and the authority relevant to the purchase.
 import { money, short } from '../world.js';
 import { whatWasLearned, sharedHandles, publicValuesOf } from '../privacy.js';
 import { describePermission } from '../../lib/scope.js';
@@ -9,7 +10,7 @@ export default {
   title: 'Scenario 1 — Agentic payment (financial sector)',
   framing:
     'A consumer authorizes a shopping agent. Merchants and a bank with Bank Secrecy Act obligations must decide whether to accept its transactions. ' +
-    'Shows: PPIDs on first contact, selective disclosure, live status, refusal above the authorized limit, revocation, evidence retention, and identity resolution by a regulator.',
+    'Shows: IDs on first contact, selective disclosure, a regulated counterparty asking for more, live status, refusal above the authorized limit, revocation, evidence retention, and attribution by a regulator.',
 
   async run(world, n) {
     const { regA, ledgerline } = world;
@@ -74,7 +75,8 @@ export default {
     const sarCandidates = [];
     const bank = await world.relyingParty({
       id: 'firstledger.bank.example', name: 'First Ledger Bank',
-      rules: { 'payments.authorize': [{ label: 'BSA-covered payment', require: { accountability: 'established', authorization: true } }] },
+      // A regulated business sets acceptance criteria: a person or organization proofed to a stated level, with a short chain.
+      rules: { 'payments.authorize': [{ label: 'BSA-covered payment', require: { accountability: 'established', authorization: true, principalType: ['natural_person', 'legal_person'], assurance: ['IAL2', 'IAL3', 'high'], maxChainLength: 2 } }] },
       handlers: { 'payments.authorize': async (p) => ({ payment: `PAY-${Math.floor(Math.random() * 1e6)}`, payee: p.payee }) },
       onDecision: ({ decision, evidence }) => {
         if (decision.decision !== 'allow' && evidence.ppid) {
@@ -92,6 +94,7 @@ export default {
     n.learned('Gadget Barn', whatWasLearned(gadgetBarn.evidence.at(-1)));
     n.expect(buy1.decision === 'allow' && buy1.classification === 'ACCOUNTABLE_PROTECTED', 'purchase accepted from an accountable agent whose principal stays private');
     n.expect(gadgetBarn.evidence.at(-1).authority_relied_on.length === 1, 'merchant saw only the purchasing permission, not the payment or travel authority');
+    n.expect(gadgetBarn.evidence.at(-1).root.type === null && gadgetBarn.evidence.at(-1).chain_length === null, 'the merchant did not ask what kind of principal it is or how it was verified, so it was not told');
 
     n.step('ShopBot asks First Ledger Bank to pay the merchant');
     const pay1 = await shopbot.act(bank.url, 'payments.authorize', { payee: 'gadgetbarn.example', amount: money(129) });
@@ -99,13 +102,13 @@ export default {
     const bankEv = bank.evidence.at(-1);
     n.say('The bank keeps a BSA-ready record of what it relied on:');
     n.detail('PPID presented', short(bankEv.ppid, 48));
-    n.detail('chain resolved', `${bankEv.root.type}, ${bankEv.root.assurance}, ${bankEv.chain_length} link(s), via ${bankEv.registry}`);
+    n.detail('what it asked the agent to show', `${bankEv.root.type}, proofed to ${bankEv.root.assurance}, ${bankEv.chain_length} link(s), vouched for by ${bankEv.registry}`);
     n.detail('profile relied upon', bankEv.authority_relied_on.map(describePermission).join('; '));
     n.detail('signed status tokens retained', bankEv.status_tokens.length);
     n.detail('disposition', bankEv.decision);
     const rv = world.verifyReceipt(bankEv.activity_receipt);
     n.detail('activity-log receipt', `${bankEv.activity_receipt.log_id} #${bankEv.activity_receipt.index}, inclusion proof ${rv.ok ? 'verified' : 'FAILED'}`);
-    n.expect(pay1.decision === 'allow' && rv.ok, 'payment accepted; the bank holds a verifiable receipt for its log entry');
+    n.expect(pay1.decision === 'allow' && rv.ok && bankEv.root.assurance === 'IAL2', 'payment accepted on the bank\'s criteria (kind of principal, assurance level, chain length); it holds a verifiable receipt for its log entry');
 
     n.step('ShopBot shops at a second merchant, Book Nook');
     const buy2 = await shopbot.act(bookNook.url, 'commerce.purchase', { item: 'The Federalist Papers', amount: money(38), category: 'books' });
