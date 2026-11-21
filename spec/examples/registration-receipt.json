@@ -2,18 +2,18 @@
   "header": {
     "alg": "EdDSA",
     "typ": "aaf-registration+jwt",
-    "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+    "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w"
   },
   "payload": {
     "iss": "https://registry-a.aaf.test",
-    "sub": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
-    "iat": 1792270758,
-    "agent_key": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4",
+    "sub": "reg_8rmfjcqpw2pe1624c73r88rnp8",
+    "iat": 1795303625,
+    "agent_key": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ",
     "principal": {
       "type": "principal",
-      "id": "prn_8m47hf116xf8tn60f4kjqx927r",
+      "id": "prn_cewt16y2fhzq4rxk3wr1c76xxc",
       "key_thumbprints": [
-        "wUy0hKWac7W0GEnWRrnJqpKIRk-IkjHyiTjqakaMwYk"
+        "zLI_5vpYtOw1eG7pUXLv6_XlJd6P29LdOP6p_gHeTQY"
       ]
     },
     "depth": 1,
@@ -26,7 +26,7 @@
       {
         "role": "provenance",
         "rk": "https://records-1.aaf.test",
-        "ref": "prov_KsdVq6cQSsn2t8xUe3-WNA"
+        "ref": "prov_XUR014Em3Os1vwaWv0v6Nc"
       },
       {
         "role": "activity",

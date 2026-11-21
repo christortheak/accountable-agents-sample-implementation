@@ -8,7 +8,9 @@ This is a **reference implementation for research and discussion**, not producti
 - Service keys are stored on disk unencrypted and cannot be rotated.
 - There is no rate limiting or abuse protection.
 - Identity verification is simulated, or done by hand by a pilot's operator. It is not a KYC check.
-- In ephemeral mode, relying parties cannot link an agent's presentations, but the registry could (blind credentials are not implemented).
+- With single-use IDs, relying parties cannot link an agent's presentations, but the registry could. It issues each ID on demand for a named relying party, so it also learns which services an agent uses (blind credentials and batch issuance are not implemented).
+- The rule for "one principal record per verified identity" keys people by name, jurisdiction and date of birth. That shows where the rule sits; it is not strong enough for real use.
+- Legal orders are checked for a recognized authority's signature, but anyone holding a valid order can submit it.
 - Logs use RFC 9162 Merkle trees with JSON receipts, not IETF SCITT, and nobody independently witnesses the registry's log.
 - The simulator's passkeys come from a software authenticator that sets "user verified" without a person present. The browser demo uses real passkeys.
 - Operator endpoints (`/admin/*`) are protected only by a bearer token. Public deployments must block them at the proxy, as `deploy/Caddyfile` does.

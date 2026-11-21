@@ -2,13 +2,13 @@
   "header": {
     "alg": "EdDSA",
     "typ": "aaf-legal-order+jwt",
-    "kid": "WsL71GdezbbePWfeJOxufN1ZvnpZZEz81E9NJuEXl4w"
+    "kid": "RpuUqdG10Hi4llQJPd9ZT4VLrx5_mab08CocbJ0YImM"
   },
   "payload": {
     "iss": "https://court.sdny.test",
     "case": "Example v. Doe",
     "ppids": [
-      "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94"
+      "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm"
     ],
     "relying_party": "shop.example",
     "requester": "Shop",
@@ -17,8 +17,8 @@
       "chain"
     ],
     "notify_principal": true,
-    "iat": 1792270758,
-    "exp": 1794862758,
-    "jti": "ord_rhsrqm84jw8vf1q8"
+    "iat": 1795303625,
+    "exp": 1797895625,
+    "jti": "ord_mht9afg3mtqv3v6f"
   }
 }

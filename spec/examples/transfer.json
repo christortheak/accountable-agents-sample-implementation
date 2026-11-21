@@ -1,29 +1,29 @@
 {
   "offer": {
-    "offer_id": "xfr_p2fmbw0436sajre8c020",
-    "registration_id": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
-    "to_principal": "prn_2wxwdbk435hxyxhqqfxr00h52g",
+    "offer_id": "xfr_sn6re59ks8ncnyh0tnw0",
+    "registration_id": "reg_8rmfjcqpw2pe1624c73r88rnp8",
+    "to_principal": "prn_918c01ab4x24mfak5r1d3hk0a0",
     "subtree": "move",
-    "expires_at": "2026-10-24T20:59:18.151Z"
+    "expires_at": "2026-11-28T23:27:05.997Z"
   },
   "accepted": {
-    "registration_id": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+    "registration_id": "reg_8rmfjcqpw2pe1624c73r88rnp8",
     "receipt": {
       "header": {
         "alg": "EdDSA",
         "typ": "aaf-registration+jwt",
-        "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+        "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w"
       },
       "payload": {
         "iss": "https://registry-a.aaf.test",
-        "sub": "reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
-        "iat": 1792270758,
-        "agent_key": "DgLhGwEV6jxM63PF78pAROKBYuK91NbdHSfQHr1wN0E",
+        "sub": "reg_8rmfjcqpw2pe1624c73r88rnp8",
+        "iat": 1795303625,
+        "agent_key": "ueCK5LgEgkNIXfjesCpDuR386cKplfACOPud-afC6qw",
         "principal": {
           "type": "principal",
-          "id": "prn_2wxwdbk435hxyxhqqfxr00h52g",
+          "id": "prn_918c01ab4x24mfak5r1d3hk0a0",
           "key_thumbprints": [
-            "66NMeQpjseUu178QPBWWk3PhkdPfN_f0Byztg2PlmtM"
+            "ELGCBMdIBG7gY-9LIBwHLveJmirXaW-IWRgMtdNFVeA"
           ]
         },
         "depth": 1,
@@ -36,7 +36,7 @@
           {
             "role": "provenance",
             "rk": "https://records-1.aaf.test",
-            "ref": "prov_KsdVq6cQSsn2t8xUe3-WNA"
+            "ref": "prov_XUR014Em3Os1vwaWv0v6Nc"
           },
           {
             "role": "activity",

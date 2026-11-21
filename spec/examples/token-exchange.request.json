@@ -17,21 +17,21 @@
     "header": {
       "alg": "EdDSA",
       "typ": "JWT",
-      "kid": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4",
+      "kid": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ",
       "jwk": {
         "crv": "Ed25519",
-        "x": "edxzdijIpNYiSTpAoCSK9ozDPlFfZTwDuAnM_rn_7wE",
+        "x": "23LiN_1P6XBuxQGvabelshitO47PznijJ22VfuCiP1U",
         "kty": "OKP",
-        "kid": "FbLem8vYjBPuAwKfBwFOH7OmvASBhIBG6xYO59VN2D4"
+        "kid": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ"
       }
     },
     "payload": {
-      "iss": "urn:aaf:registration:reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
-      "sub": "urn:aaf:registration:reg_y8k6ye6wcw1vwk4ejcrn21rt8r",
+      "iss": "urn:aaf:registration:reg_8rmfjcqpw2pe1624c73r88rnp8",
+      "sub": "urn:aaf:registration:reg_8rmfjcqpw2pe1624c73r88rnp8",
       "aud": "https://records-1.aaf.test/token",
-      "iat": 1792270758,
-      "exp": 1792270818,
-      "jti": "ca_79fqpp15zqg53c4mbdz0"
+      "iat": 1795303625,
+      "exp": 1795303685,
+      "jti": "ca_bn4mjrj8v4nstvwqz99g"
     }
   },
   "response": {

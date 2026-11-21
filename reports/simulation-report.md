@@ -1,30 +1,30 @@
 # Accountable Agents Framework: simulation report
 
-Generated 2026-10-17T21:37:42.674Z by `npm run sim`.
+Generated 2026-11-21T23:30:07.305Z by `npm run sim`.
 
 ## Scenario 1 — Agentic payment (financial sector)
 
-A consumer authorizes a shopping agent. Merchants and a bank with Bank Secrecy Act obligations must decide whether to accept its transactions. Shows: PPIDs on first contact, selective disclosure, live status, refusal above the authorized limit, revocation, evidence retention, and identity resolution by a regulator.
+A consumer authorizes a shopping agent. Merchants and a bank with Bank Secrecy Act obligations must decide whether to accept its transactions. Shows: IDs on first contact, selective disclosure, a regulated counterparty asking for more, live status, refusal above the authorized limit, revocation, evidence retention, and attribution by a regulator.
 
 
 ### 1. Onboarding, done once: the slow step
 
 - **Dana Whitfield**: enrolls with Registry A (United States) as a natural person
-- **VerityCheck (identity verifier)**: verifies her identity at IAL2; the registry records it (principal prn_9sfbbsppz5qn…)
+- **VerityCheck (identity verifier)**: verifies her identity at IAL2; the registry records it (principal prn_ec9f056bgr6v…)
 > In practice this takes minutes to days. It happens once; every later agent registration reuses it.
 
 - ✔ principal verified before any agent is registered
 
 ### 2. The agent provider publishes a bill of materials (provenance record)
 
-- **Acme Agents**: deposits the ShopBot 2.3.1 bill of materials with Ledgerline Records (authorization + provenance) → prov_ymOwGKA0MrQm_BsLqif2Te
+- **Acme Agents**: deposits the ShopBot 2.3.1 bill of materials with Ledgerline Records (authorization + provenance) → prov_XwkvOOpmp_aN5DGx2OKbP8
 > One provenance record serves every agent running this build, so pointing to it does not single out any one agent.
 
 
 ### 3. Dana registers her shopping agent: the fast step
 
-- **Dana**: registers ShopBot under her verified registration → reg_ea10bn1d9qm0… in 0.14 ms
-- ✔ registration against an already-verified principal is fast (0.14 ms)
+- **Dana**: registers ShopBot under her verified registration → reg_mw6e5vxksnhq… in 0.24 ms
+- ✔ registration against an already-verified principal is fast (0.24 ms)
 
 ### 4. Dana grants authority; the grant is deposited as an authorization record
 
@@ -33,47 +33,48 @@ A consumer authorizes a shopping agent. Merchants and a bank with Bank Secrecy A
 
 ### 5. First contact: ShopBot buys headphones at Gadget Barn
 
-- **ShopBot**: presents a PPID created for Gadget Barn, its authority, and a proof of key possession (4 ms round trip)
+- **ShopBot**: presents a PPID created for Gadget Barn, its authority, and a proof of key possession (3.3 ms round trip)
   - ✓ issued by a federation registry (https://registry-a.aaf.test)
   - ✓ registry signature valid (SD-JWT VC) (https://federation.aaf.test/vct/accountability/1)
   - ✓ issued for this relying party (gadgetbarn.example)
   - ✓ credential unexpired
   - ✓ request signed by the credential holder (RFC 9421 + key binding) (covers method, URL, body and presentation)
-  - ✓ chain ends in a verified legal person (natural_person, nist_800_63A IAL2, verified by https://kyc.verifier.test)
+  - ✓ ID resolves to a principal the directory verified (nothing further disclosed)
   - ✓ status list entry (fetched now) (VALID)
   - ✓ authorization from a federation record keeper (https://records-1.aaf.test)
   - ✓ record keeper holds https://registry-a.aaf.test's trust mark for authorization records (trust mark verified)
-  - ✓ authorization bound to this agent (act.sub = PPID, same cnf key)
+  - ✓ authorization bound to this agent (act.sub = the ID, same cnf key)
   - ✓ authorization unexpired
   - ✓ grant still in force (status list) (VALID)
   - ✓ authority covers the requested action (commerce.purchase)
 - **Gadget Barn → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: standard)
 - *What Gadget Barn learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:p_y99qs3zpx0j9bemcj… (pairwise)
-  - a natural person stands behind it, verified at assurance "IAL2" by https://kyc.verifier.test; chain length 1
-  - NOT who the principal is (identity protected; only the registry can resolve it, under legal process)
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:p_zrmmyzf4sk8qkzwwde… (PPID, the same at every visit here)
+  - that https://registry-a.aaf.test verified a principal who answers for it
+  - NOT who the principal is (identity protected; only the directory can recover it, under legal process)
   - authority shown: commerce.purchase (≤ 500 USD, categories: electronics/books/home)
 - ✔ purchase accepted from an accountable agent whose principal stays private
 - ✔ merchant saw only the purchasing permission, not the payment or travel authority
+- ✔ the merchant did not ask what kind of principal it is or how it was verified, so it was not told
 
 ### 6. ShopBot asks First Ledger Bank to pay the merchant
 
 - **First Ledger Bank → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: BSA-covered payment)
 The bank keeps a BSA-ready record of what it relied on:
 
-  - PPID presented: `ppid:registry-a.aaf.test:p_0xvh2bvkb6760z3j93cq8…`
-  - chain resolved: `natural_person, IAL2, 1 link(s), via https://registry-a.aaf.test`
+  - PPID presented: `aaf:registry-a.aaf.test:p_04r5d18chpqbampdf44e99…`
+  - what it asked the agent to show: `natural_person, proofed to IAL2, 1 link(s), vouched for by https://registry-a.aaf.test`
   - profile relied upon: `payments.authorize (≤ 500 USD)`
   - signed status tokens retained: `2`
   - disposition: `allow`
-  - activity-log receipt: `https://records-2.aaf.test #94, inclusion proof verified`
-- ✔ payment accepted; the bank holds a verifiable receipt for its log entry
+  - activity-log receipt: `https://records-2.aaf.test #2, inclusion proof verified`
+- ✔ payment accepted on the bank's criteria (kind of principal, assurance level, chain length); it holds a verifiable receipt for its log entry
 
 ### 7. ShopBot shops at a second merchant, Book Nook
 
 - **Book Nook → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: standard)
 - ✔ second merchant accepts
-- ✔ different PPID at each merchant (p_y99qs3zp… vs p_6a8psfqn…)
+- ✔ different PPID at each merchant (p_zrmmyzf4… vs p_vt7hn552…)
 
 ### 8. Can the two merchants tell they served the same agent?
 
@@ -88,7 +89,7 @@ Each party pools everything it received (identifiers, keys, signatures, salts, d
 
 - **Gadget Barn → DENY** `ACCOUNTABLE_PROTECTED` (tier: standard) — amount 899 USD exceeds authorized limit 500 USD
 - **First Ledger Bank → DENY** `ACCOUNTABLE_PROTECTED` (tier: BSA-covered payment) — amount 899 USD exceeds authorized limit 500 USD
-- **First Ledger Bank**: flags the refused attempt as a SAR candidate: detected 2026-10-17, must file by 2026-11-16 (30 days)
+- **First Ledger Bank**: flags the refused attempt as a SAR candidate: detected 2026-11-21, must file by 2026-12-21 (30 days)
 > Today such a SAR would have no accountable subject. Here the filer holds a PPID, a verified chain, and the profile the agent presented.
 
 - ✔ over-limit purchase and payment refused; refusal recorded as a SAR candidate
@@ -105,11 +106,11 @@ Each party pools everything it received (identifiers, keys, signatures, salts, d
 
 - **Regulator**: presents order SAR-2026-10-4471 to Registry A (United States)
   - root principal: `Dana Whitfield (natural_person), US-NY`
-  - verification evidence (OpenID verified_claims): `https://kyc.verifier.test: nist_800_63A IAL2: document check (vcrypt, bvr), process kyc_x69pcdddh1210`
+  - verification evidence (OpenID verified_claims): `https://kyc.verifier.test: nist_800_63A IAL2: document check (vcrypt, bvr), process kyc_12j02p9xhq6vy`
   - chain: `Dana's shopping agent [revoked: compromised]`
 - ✔ regulator obtains the identity the merchants never saw
 - ✔ principal not notified, because the order forbids tipping off (SAR confidentiality)
-> The resolution is itself logged in the registry's transparency log (now 186 entries), so lookups of identity can also be audited.
+> The resolution is itself logged in the registry's transparency log (now 10 entries), so lookups of identity can also be audited.
 
 
 ## Scenario 2 — Regulatory filing (government services / healthcare)
@@ -125,7 +126,7 @@ An organization authorizes an agent to prepare a government submission. Only a d
 ### 2. Northwind registers its filing agent and designates its compliance officer
 
 - **Priya Raman**: registers a passkey with Ledgerline Records (authorization + provenance) (WebAuthn; her device keeps the private key)
-- **Northwind**: designates the holder of that passkey as designated officer (record dsg_j53pggj9kb…)
+- **Northwind**: designates the holder of that passkey as designated officer (record dsg_h1t8feq01m…)
 - **Northwind**: grants: draft, assemble, validate. The agent may not submit on its own; submission needs the designated officer's approval of the exact document. Withdrawing filings is prohibited.
 
 ### 3. The agent validates the draft with the agency
@@ -137,18 +138,18 @@ The agency's system performs two separate checks: who is accountable, and whethe
   - ✓ issued for this relying party (portal.state-health.example)
   - ✓ credential unexpired
   - ✓ request signed by the credential holder (RFC 9421 + key binding) (covers method, URL, body and presentation)
-  - ✓ chain ends in a verified legal person (legal_person, aaf_kyb high, verified by https://kyc.verifier.test)
+  - ✓ ID resolves to a principal the directory verified (nothing further disclosed)
   - ✓ status list entry (fetched now) (VALID)
   - ✓ authorization from a federation record keeper (https://records-1.aaf.test)
   - ✓ record keeper holds https://registry-a.aaf.test's trust mark for authorization records (trust mark verified)
-  - ✓ authorization bound to this agent (act.sub = PPID, same cnf key)
+  - ✓ authorization bound to this agent (act.sub = the ID, same cnf key)
   - ✓ authorization unexpired
   - ✓ grant still in force (status list) (VALID)
   - ✓ authority covers the requested action (filing.validate)
 - **Agency → ALLOW** `ACCOUNTABLE_DISCLOSED` (tier: pre-submission validation)
 - *What the agency learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:p_15ke47nzxedxtfn33… (pairwise)
-  - a legal person (organization) stands behind it, verified at assurance "high" by https://kyc.verifier.test; chain length 1
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:p_b66hkjswc38whtmept… (PPID, the same at every visit here)
+  - that https://registry-a.aaf.test verified a principal who answers for it
   - identity, disclosed with the principal's consent: Northwind Health LLC, US-CA, CA-LLC-202614427
   - authority shown: filing.validate
 - ✔ validation accepted; the agency knows it is dealing with Northwind Health LLC
@@ -187,16 +188,16 @@ Under court order, the activity log for the agent's PPID at the agency is produc
 
 | # | written by | event | action | outcome | inclusion proof |
 | --- | --- | --- | --- | --- | --- |
-| 106 | portal.state-health.example | decision | filing.validate | allow | verified |
-| 107 | agent | action | filing.validate | allow | verified |
-| 108 | portal.state-health.example | decision | filing.submit | deny | verified |
-| 109 | agent | action | filing.submit | deny | verified |
-| 110 | portal.state-health.example | decision | filing.submit | allow | verified |
-| 111 | agent | action | filing.submit | allow | verified |
-| 112 | portal.state-health.example | decision | filing.submit | deny | verified |
-| 113 | agent | action | filing.submit | deny | verified |
-| 114 | portal.state-health.example | decision | filing.submit | deny | verified |
-| 115 | agent | action | filing.submit | deny | verified |
+| 14 | portal.state-health.example | decision | filing.validate | allow | verified |
+| 15 | agent | action | filing.validate | allow | verified |
+| 16 | portal.state-health.example | decision | filing.submit | deny | verified |
+| 17 | agent | action | filing.submit | deny | verified |
+| 18 | portal.state-health.example | decision | filing.submit | allow | verified |
+| 19 | agent | action | filing.submit | allow | verified |
+| 20 | portal.state-health.example | decision | filing.submit | deny | verified |
+| 21 | agent | action | filing.submit | deny | verified |
+| 22 | portal.state-health.example | decision | filing.submit | deny | verified |
+| 23 | agent | action | filing.submit | deny | verified |
 
 Ledgerline Records (authorization + provenance) separately holds Northwind's signed grant and the approval record tying Priya's signature to document EjAwZs5R0z5G….
 
@@ -206,9 +207,9 @@ Ledgerline Records (authorization + provenance) separately holds Northwind's sig
 
 - **Regional Lab → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: licensed providers only)
 - *What the lab learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:p_v0hqtgj09hxs863br… (pairwise)
-  - a legal person (organization) stands behind it, verified at assurance "high" by https://kyc.verifier.test; chain length 1
-  - NOT who the principal is (identity protected; only the registry can resolve it, under legal process)
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:p_t23rz2966tpbs00xvf… (PPID, the same at every visit here)
+  - that https://registry-a.aaf.test verified a principal who answers for it
+  - NOT who the principal is (identity protected; only the directory can recover it, under legal process)
   - verified principal attribute: licensed_healthcare_provider = CA
   - authority shown: labs.read_results
 - ✔ the lab learns "licensed provider in CA" without learning which provider
@@ -236,9 +237,9 @@ Rogue agents attack a model-hosting platform with stolen credentials. In July 20
 The stolen token works and the agents are accountable, so the attack begins. From the first request, ModelHub holds a PPID per agent, a verified chain, and signed log entries.
 
 - *What ModelHub learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:p_3a3ha44z5fq6nj815… (pairwise)
-  - a legal person (organization) stands behind it, verified at assurance "high" by https://kyc.verifier.test; chain length 1
-  - NOT who the principal is (identity protected; only the registry can resolve it, under legal process)
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:p_bv3847hk0d1j7pt2vj… (PPID, the same at every visit here)
+  - that https://registry-a.aaf.test verified a principal who answers for it
+  - NOT who the principal is (identity protected; only the directory can recover it, under legal process)
   - authority shown: (none for this action)
 - ✔ the framework does not prevent an attack carried out with valid stolen credentials
 - **ModelHub (create a write token) → DENY** `ACCOUNTABLE_PROTECTED` (tier: account changes) — no disclosed permission covers account.create_token
@@ -246,13 +247,13 @@ The stolen token works and the agents are accountable, so the attack begins. Fro
 
 ### 3. Detection: one account token used by several unfamiliar agents
 
-- **ModelHub**: anomaly detector fires at T+18ms: 3 distinct agent PPIDs using one account token
+- **ModelHub**: anomaly detector fires at T+16ms: 3 distinct agent PPIDs using one account token
 - ✔ anomaly detected from evidence the platform already holds
 
 ### 4. Incident report: the registry relays it to the principal without revealing who that is
 
 - **ModelHub**: files 3 incident reports with Registry A (United States); incident-response contact returned: security@frontierlab.example
-- **Frontier Lab Inc.**: is notified at T+23ms: eval-runner-1, eval-runner-2, eval-runner-3 reported by modelhub.example
+- **Frontier Lab Inc.**: is notified at T+19ms: eval-runner-1, eval-runner-2, eval-runner-3 reported by modelhub.example
 > The compromised principal learns of the compromise from the lookup itself, not from its own forensic investigation days later.
 
 - ✔ principal notified about each of its agents; reporter still does not know who the principal is
@@ -260,7 +261,7 @@ The stolen token works and the agents are accountable, so the attack begins. Fro
 ### 5. Containment: Frontier Lab revokes the agents
 
 - **ModelHub ← eval-runner-2 (retry) → DENY** `REVOKED` (tier: private data (account token + accountable agent)) — registration no longer active (revoked or expired)
-- ✔ attack stopped at T+25ms: revoked agents can neither obtain new credentials nor use cached ones
+- ✔ attack stopped at T+20ms: revoked agents can neither obtain new credentials nor use cached ones
 
 ### 6. Attribution under legal process
 
@@ -283,9 +284,9 @@ ModelHub now stops honoring bare API tokens. People act on their account with a 
 - **Morgan Lee**: sees the request: legal person verified high by https://kyc.verifier.test; chain length 1; requests dataset.*, and approves it with her passkey (Face ID)
 - **ModelHub ← Victim Org's own agent (after approval) → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: private data: the account holder, or an agent they authorized) — agent authorized by the account holder with their passkey
 - ✔ the account holder's passkey approval binds account access to one accountable agent
-- **Frontier Lab eval-runners 4–6**: go rogue the same way and present Victim Org's stolen token (mh_victimorg_9…)
+- **Frontier Lab eval-runners 4–6**: go rogue the same way and present Victim Org's stolen token (mh_victimorg_r…)
 - **ModelHub ← eval-runner-4 → DENY** `ACCOUNTABLE_PROTECTED` (tier: private data: the account holder, or an agent they authorized) — the account's token was presented by an agent the account holder never authorized
-- **ModelHub**: files an incident on each attempt; Frontier Lab is notified at T+47ms about eval-runner-4, eval-runner-5, eval-runner-6
+- **ModelHub**: files an incident on each attempt; Frontier Lab is notified at T+40ms about eval-runner-4, eval-runner-5, eval-runner-6
 - ✔ the stolen token is worthless to someone else's agents: refused at the first request, zero rows read, and the principal notified at once
 - **ModelHub ← unidentified client with the stolen token → DENY** `UNLABELED` (tier: private data: the account holder, or an agent they authorized) — a bearer token alone is not accepted: the account holder must approve with their passkey, or act through an accountable agent they have authorized
 - **Attacker**: tries the human path, approving with a passkey of its own → this authenticator holds no passkey for that relying party
@@ -304,8 +305,8 @@ ModelHub now stops honoring bare API tokens. People act on their account with a 
 
 |  | July 2026 (actual) | Framework alone (branch B) | Framework + passkeys (branch C) |
 | --- | --- | --- | --- |
-| outcome | private data taken over 4 days | attack runs until revoked (T+25ms, simulated) | refused at the first request; nothing read |
-| principal learns of compromise | own forensics, days later | incident relayed after detection | incident relayed on the first attempt (T+47ms) |
+| outcome | private data taken over 4 days | attack runs until revoked (T+20ms, simulated) | refused at the first request; nothing read |
+| principal learns of compromise | own forensics, days later | incident relayed after detection | incident relayed on the first attempt (T+40ms) |
 | victim learns which model | unknown at disclosure | provenance lookup | provenance lookup |
 | victim learns who | 7+ days, by voluntary disclosure | registry resolution under court order | registry resolution under court order |
 | evidence | principal's internal logs | signed entries from both sides | signed entries from both sides |
@@ -317,12 +318,15 @@ ModelHub now stops honoring bare API tokens. People act on their account with a 
 
 - **TetherCo LLC**: sells 'principal-as-a-service': it registers agents for anonymous customers under its own verified registration
 - **ModelHub ← client-7731 → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: private data (account token + accountable agent))
-- **Court**: resolves the PPID → TetherCo LLC (verified high, process kyc_wbsvvtyzgpbg8)
+- **Court**: resolves the PPID → TetherCo LLC (verified high, process kyc_c3vpcdqhvr550)
 > Once untethered agents are blocked, tether fraud is the remaining attack. But the sham sponsor is verified and on record, which creates a liability hook: TetherCo must answer for the agent or identify its customer.
 
 - ✔ the sham sponsor is identified and answerable
+- **Court**: orders Registry A (United States) to revoke the agent → revoked (legal_order); every ID it holds stops verifying
+- **ModelHub ← client-7731 (after the order) → DENY** `REVOKED` (tier: private data (account token + accountable agent)) — registration no longer active (revoked or expired)
+- ✔ a rogue agent whose sponsor will not act is stopped by the directory under a legal order
 
-## Scenario 4 — Paid compute pilot (the open challenge in §5.6)
+## Scenario 4 — Paid compute pilot (the pilot the paper calls for)
 
 Ampere Cloud rents GPUs to agents. Small jobs need an accountable principal and authority. Large jobs also need a disclosed principal and the agent's bill of materials. Success means a timely, justified decision that preserves privacy and leaves usable evidence, not merely returning an identifier.
 
@@ -331,21 +335,21 @@ Ampere Cloud rents GPUs to agents. Small jobs need an accountable principal and 
 
 - **Ampere Cloud → ALLOW** `ACCOUNTABLE_DISCLOSED` (tier: large (> 8 GPU-hours))
 - *What Ampere learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:p_srkqcw7n4hybmakvn… (pairwise)
-  - a legal person (organization) stands behind it, verified at assurance "high" by https://kyc.verifier.test; chain length 1
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:p_sp08904g9h3d40eyj7… (PPID, the same at every visit here)
+  - that https://registry-a.aaf.test verified a principal who answers for it
   - identity, disclosed with the principal's consent: Helix Bio Inc., MA-001844210
   - authority shown: compute.provision (≤ 256 gpu-hour, regions: us-east)
 - ✔ large job granted to a disclosed, accountable organization with a published bill of materials
 
-### 2. Case 2: a privacy-protected human principal using ephemeral PPIDs
+### 2. Case 2: a privacy-protected human principal using single-use IDs
 
 - **Samuel Okafor**: an independent researcher, verified at IAL2, consents to disclose nothing. His agent uses ephemeral mode: a fresh PPID for every request.
 - **Ampere Cloud (4 GPU-h) → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: small (≤ 8 GPU-hours))
 - **Ampere Cloud (2 GPU-h) → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: small (≤ 8 GPU-hours))
 - *What Ampere learned:*
-  - an identifier for this agent, valid only here: ppid:registry-a.aaf.test:e_s682mcn48pvgc2wb5… (ephemeral)
-  - a natural person stands behind it, verified at assurance "IAL2" by https://kyc.verifier.test; chain length 1
-  - NOT who the principal is (identity protected; only the registry can resolve it, under legal process)
+  - an ID for this agent, valid only here: aaf:registry-a.aaf.test:e_0pd4f734mk6gabkz5t… (single-use ID)
+  - that https://registry-a.aaf.test verified a principal who answers for it
+  - NOT who the principal is (identity protected; only the directory can recover it, under legal process)
   - authority shown: compute.provision (≤ 64 gpu-hour, regions: us-east/us-west)
 - ✔ small job granted while the person stays private
 - ✔ Ampere cannot even link the two sessions; it keeps a sealed reference only the registry can open
@@ -369,9 +373,9 @@ Ampere Cloud rents GPUs to agents. Small jobs need an accountable principal and 
 - **Ampere Cloud (cached, still-unexpired credentials) → DENY** `REVOKED` (tier: small (≤ 8 GPU-hours)) — registration no longer active (revoked or expired)
 - ✔ revoked credentials fail both ways: no new attestations, and cached ones fail the live status check
 
-### 5. Ephemeral PPIDs still resolve, but only with the sealed reference
+### 5. Single-use IDs still resolve, but only with the sealed reference
 
-- **Court**: without the sealed reference → ephemeral PPIDs resolve only with their sealed reference
+- **Court**: without the sealed reference → single-use IDs resolve only with the sealed reference the counterparty kept
 - **Court**: with the sealed reference Ampere kept → Samuel Okafor (natural_person)
 - ✔ the registry stores nothing linkable, yet a party holding evidence can still obtain resolution under legal process
 
@@ -380,14 +384,14 @@ Ampere Cloud rents GPUs to agents. Small jobs need an accountable principal and 
 
 | case | decision | classification | latency | what Ampere learned about the principal | evidence kept |
 | --- | --- | --- | --- | --- | --- |
-| disclosed org, 64 GPU-h | allow | ACCOUNTABLE_DISCLOSED | 2.4ms | Helix Bio Inc. | signed presentation + 2 signed status token(s) + log receipt |
-| protected human, 4 GPU-h | allow | ACCOUNTABLE_PROTECTED | 1.6ms | natural person, identity protected | signed presentation + 2 signed status token(s) + sealed reference + log receipt |
-| protected human, 32 GPU-h | step_up | ACCOUNTABLE_PROTECTED | 1.6ms | natural person, identity protected | signed presentation + 2 signed status token(s) + sealed reference + log receipt |
+| disclosed org, 64 GPU-h | allow | ACCOUNTABLE_DISCLOSED | 1.9ms | Helix Bio Inc. | signed presentation + 2 signed status token(s) + log receipt |
+| protected human, 4 GPU-h | allow | ACCOUNTABLE_PROTECTED | 1.4ms | a verified principal, identity protected | signed presentation + 2 signed status token(s) + sealed reference + log receipt |
+| protected human, 32 GPU-h | step_up | ACCOUNTABLE_PROTECTED | 1.2ms | a verified principal, identity protected | signed presentation + 2 signed status token(s) + sealed reference + log receipt |
 | self-asserted claim | deny | UNSUPPORTED | — | nothing verifiable | the rejected request |
 | unknown registry | deny | UNSUPPORTED | — | nothing verifiable | the rejected request |
 | replayed credentials | deny | UNSUPPORTED | — | nothing verifiable | the rejected request |
-| registry unreachable | deferred | LOOKUP_FAILED | 0.6ms | natural person, identity protected | signed presentation + sealed reference |
-| revoked, cached credentials | deny | REVOKED | 1.5ms | natural person, identity protected | signed presentation + 2 signed status token(s) + log receipt |
+| registry unreachable | deferred | LOOKUP_FAILED | 0.6ms | a verified principal, identity protected | signed presentation + sealed reference |
+| revoked, cached credentials | deny | REVOKED | 1.3ms | a verified principal, identity protected | signed presentation + 2 signed status token(s) + log receipt |
 
 
 ## Scenario 5 — Federated registries and delegation chains
@@ -410,15 +414,16 @@ Chain: RailBooker @ https://registry-b.aaf.test → Dispatch @ https://registry-
 
 - **Dispatch**: tries to delegate €10,000 of purchasing → rejected by Ledgerline Records (authorization + provenance): permission commerce.purchase (≤ 10000 EUR, categories: rail) exceeds the parent grant
 - ✔ over-delegation rejected at deposit
-- **Dispatch**: delegates purchases ≤ €400 (rail only) for 7 days → grt_pr5z1dkz2q22…
+- **Dispatch**: delegates purchases ≤ €400 (rail only) for 7 days → grt_550t1xyardnn…
 
 ### 4. RailBooker books a train at an EU relying party
 
 - **Rail Europa → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: ticketing)
 - *What Rail Europa learned:*
-  - an identifier for this agent, valid only here: ppid:registry-b.aaf.test:p_0m0ccpb1pzf5a0zcw… (pairwise)
-  - a legal person (organization) stands behind it, verified at assurance "high" by https://kyc.verifier.test; chain length 2
-  - NOT who the principal is (identity protected; only the registry can resolve it, under legal process)
+  - an ID for this agent, valid only here: aaf:registry-b.aaf.test:p_qpag0rfpmy54jdve2n… (PPID, the same at every visit here)
+  - that https://registry-b.aaf.test verified a principal who answers for it
+  - because it asked: chain length 2
+  - NOT who the principal is (identity protected; only the directory can recover it, under legal process)
   - authority shown: commerce.purchase (≤ 400 EUR, categories: rail)
   - attestation issued by https://registry-b.aaf.test; the authority is delegated, not granted directly by the principal
 - ✔ relying party verifies a two-registry chain through the registry it knows
@@ -454,26 +459,26 @@ Records must be attributable to their source, tamper-evident, and reachable thro
 ### 1. A refused transaction is logged, and the relying party keeps its receipt
 
 - **Parcel Exchange → DENY** `ACCOUNTABLE_PROTECTED` (tier: standard) — amount 4800 USD exceeds authorized limit 1000 USD
-- **Tessera Logs**: acknowledges entry #163 with an inclusion proof and a signed tree head (size 164, root 16hp8rGSedTdDfZs…)
+- **Tessera Logs**: acknowledges entry #73 with an inclusion proof and a signed tree head (size 74, root gInrXTmaFiVJvbmT…)
 - ✔ refusal recorded; receipt verifies
 
 ### 2. The record keeper is compromised and rewrites history
 
-- **Tessera Logs (compromised)**: rewrites entry #163 so the refusal reads as an approval, and recomputes its tree to stay internally consistent
+- **Tessera Logs (compromised)**: rewrites entry #73 so the refusal reads as an approval, and recomputes its tree to stay internally consistent
 
 ### 3. Parcel Exchange audits its record
 
-- **Parcel Exchange**: entry #163 now hashes to Ob8Vg9eh6JaIIb0f…, but the receipt says kDmBqII5hyN8QLV6… → MISMATCH
+- **Parcel Exchange**: entry #73 now hashes to vD-Tbwrw4Vk7k1Ct…, but the receipt says iirUIkEY7FEWvxtw… → MISMATCH
 - **Parcel Exchange**: its own signature on the entry no longer verifies, so the change was not made by Parcel Exchange
 - **Parcel Exchange**: asks Tessera to prove its current log extends the tree it signed earlier → proof FAILS
-- **Parcel Exchange**: Tessera now reports root fYgov1sscTnzCRv8… for size 164, but it signed 16hp8rGSedTdDfZs… for that size
+- **Parcel Exchange**: Tessera now reports root KfBN1Co0trJXTZI9… for size 74, but it signed gInrXTmaFiVJvbmT… for that size
 > Two signed statements from the same keeper about the same tree size disagree. That is cryptographic proof of misconduct, which can be put to the accrediting registry.
 
 - ✔ tampering detected, with proof that can be shown to others
 
 ### 4. The registry's chain of custody is intact
 
-- **Auditor**: checks Registry A (United States)'s transparency log grew append-only from 255 to 259 entries → verified
+- **Auditor**: checks Registry A (United States)'s transparency log grew append-only from 81 to 85 entries → verified
 - **Investigators**: still resolve the agent through the registry → Ostrander Supply Co.; the registry's record never depended on Tessera
 - ✔ registry log verified append-only; the investigation proceeds without the compromised keeper
 
@@ -516,7 +521,7 @@ Agents register other agents, so registrations form lineages. Short-lived sub-ag
 
 - **Unvetted Holdings Ltd**: tries to accept an offer of Atlas → the receiving principal must be verified
 - ✔ an agent can only pass to a verified principal
-- **Orchard Analytics LLC**: signs an offer of Atlas and its lineage to Meridian (xfr_vgpc4pzc1j…, valid 7 days)
+- **Orchard Analytics LLC**: signs an offer of Atlas and its lineage to Meridian (xfr_rxs8qnytn3…, valid 7 days)
 - **Meridian Research Inc.**: is notified of the offer (Atlas (research orchestrator), 2 sub-agent(s)) and signs its acceptance with a fresh key for Atlas
 - **Registry A**: records the transfer: 2 sub-agent(s) move with Atlas; every old PPID in the lineage is now "transferred"
 - ✔ Scout and Fetcher move with Atlas (the deregistered branch stays deregistered)
@@ -532,8 +537,8 @@ Agents register other agents, so registrations form lineages. Short-lived sub-ag
 - **Meridian Research Inc.**: grants Atlas data access; Ledgerline marks Orchard's earlier grant superseded (1)
 - **DataMart ← Atlas → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: licensed data)
 - **DataMart ← Scout → ALLOW** `ACCOUNTABLE_PROTECTED` (tier: licensed data)
-  - Atlas PPID at DataMart: `p_nx84xknvce… → p_6vaavff2eb…`
-  - Scout PPID at DataMart: `p_fsg3z1avs7… → p_30jxp8w5ff… (receipt version 1)`
+  - Atlas PPID at DataMart: `p_nyy3a5kk59… → p_3fwk0gc6dq…`
+  - Scout PPID at DataMart: `p_zxy7nrxndz… → p_5yc2k7z043… (receipt version 1)`
 - ✔ new principal, new relationship, new PPIDs; sub-agents continue once re-authorized
   - values shared before and after the transfer: `none`
 - ✔ DataMart cannot link Meridian's use of Atlas to Orchard's history from what it was shown
@@ -542,7 +547,7 @@ Agents register other agents, so registrations form lineages. Short-lived sub-ag
 
   - pre-transfer PPID (transferred): `Orchard Analytics LLC; current holder Meridian Research Inc.`
   - post-transfer PPID: `Meridian Research Inc.`
-  - custody history: `Orchard Analytics LLC (21:37:40–21:37:42) → Meridian Research Inc. (21:37:42–now)`
+  - custody history: `Orchard Analytics LLC (23:30:05–23:30:07) → Meridian Research Inc. (23:30:07–now)`
 - ✔ the old principal answers for conduct before the transfer; the new one for conduct after
 
 ### 8. A transfer can also end the lineage instead of moving it
@@ -553,11 +558,11 @@ Agents register other agents, so registrations form lineages. Short-lived sub-ag
 
 | scenario | expectations | result | time |
 | --- | --- | --- | --- |
-| Scenario 1 — Agentic payment (financial sector) | 13/13 | pass | 43ms |
-| Scenario 2 — Regulatory filing (government services / healthcare) | 7/7 | pass | 36ms |
-| Scenario 3 — The Hugging Face incident, replayed (negative scenario) | 15/15 | pass | 74ms |
-| Scenario 4 — Paid compute pilot (the open challenge in §5.6) | 8/8 | pass | 29ms |
-| Scenario 5 — Federated registries and delegation chains | 7/7 | pass | 19ms |
-| Scenario 6 — Audit: tamper-evident records | 3/3 | pass | 10ms |
-| Scenario 7 — Agent lineages and transfer between principals | 11/11 | pass | 1782ms |
+| Scenario 1 — Agentic payment (financial sector) | 14/14 | pass | 39ms |
+| Scenario 2 — Regulatory filing (government services / healthcare) | 7/7 | pass | 27ms |
+| Scenario 3 — The Hugging Face incident, replayed (negative scenario) | 16/16 | pass | 65ms |
+| Scenario 4 — Paid compute pilot (the pilot the paper calls for) | 8/8 | pass | 26ms |
+| Scenario 5 — Federated registries and delegation chains | 7/7 | pass | 17ms |
+| Scenario 6 — Audit: tamper-evident records | 3/3 | pass | 8ms |
+| Scenario 7 — Agent lineages and transfer between principals | 11/11 | pass | 1764ms |
 

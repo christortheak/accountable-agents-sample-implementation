@@ -1,0 +1,75 @@
+{
+  "identity_proofing": {
+    "verified_identities": [
+      "natural_person",
+      "legal_person"
+    ],
+    "method": "OpenID Connect for Identity Assurance verified_claims, recorded by a recognized identity verifier; each ID can show the trust framework and assurance level",
+    "identity_verifiers": [
+      "https://kyc.verifier.test"
+    ],
+    "sybil_resistance": "one principal record per verified identity: a legal entity by LEI or registration number, a person by name, jurisdiction and date of birth",
+    "reverification": "a verification expires; while it is lapsed the principal cannot register agents and its agents are suspended"
+  },
+  "authentication": {
+    "principals": "an Ed25519 key enrolled with the principal record; every request is signed (RFC 9421)",
+    "agents": "an Ed25519 key whose possession the agent proves at registration; a separate key per counterparty or per presentation is bound into each ID"
+  },
+  "ids": {
+    "modes": {
+      "pairwise": "reusable: at most one per agent and counterparty (a PPID)",
+      "ephemeral": "single-use and unlinkable"
+    },
+    "validity_seconds": 300,
+    "claims": "every claim except the ID is selectively disclosable by the agent"
+  },
+  "revocation": {
+    "by": [
+      "the principal",
+      "a delegating agent, for its sub-agents",
+      "this directory, for fraud or under its operating rules",
+      "a recognized authority, by legal order"
+    ],
+    "cascades_to_sub_agents": true,
+    "latency_seconds": {
+      "bound": 300,
+      "status_list_refresh": 10,
+      "without_status_check": 300
+    },
+    "status": "a published Token Status List, fetched whole: this directory does not learn which ID a counterparty checks"
+  },
+  "records": {
+    "held": [
+      "principal records with verified identity",
+      "agent records and their chains",
+      "custody history",
+      "pairwise IDs issued and their counterparties",
+      "incident reports",
+      "disclosures made"
+    ],
+    "not_held": [
+      "authorizations",
+      "bills of materials",
+      "activity (accredited record keepers hold these)",
+      "a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)"
+    ],
+    "retention_years": 5,
+    "kept_after_revocation": true,
+    "log": "every change is an entry in an append-only Merkle log with signed tree heads"
+  },
+  "disclosure": {
+    "to_counterparties": "identity claims only where the principal's disclosure policy names the claim and the counterparty",
+    "attribution": {
+      "process": "a legal order from a recognized authority that names the ID; single-use IDs also need the sealed reference the counterparty kept",
+      "authorities": [
+        "https://court.sdny.test",
+        "https://fincen.test"
+      ],
+      "logged": true,
+      "principal_notified": "yes, unless the order forbids it"
+    },
+    "incidents": "reports are relayed to the principal without telling the reporter who the principal is"
+  },
+  "signing_keys": "held in files on the operator's server; no hardware protection and no rotation (reference implementation)",
+  "security": "a reference implementation for discussion and pilots; not operated to a production standard"
+}

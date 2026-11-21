@@ -1,10 +1,10 @@
 # Accountable Agents Framework: reference implementation
 
-A working implementation of the framework described in *The Accountable Agents Framework* (forthcoming). It has four parts:
+A working implementation of the framework described in *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026). The paper's conclusion invites "a reference implementation of a realistic workflow"; this is one. It has four parts:
 
-- **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.2), with real example artifacts in [`spec/examples/`](spec/examples/).
+- **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.3), with real example artifacts in [`spec/examples/`](spec/examples/). Its [§3](spec/AAF-SPEC.md#3-requirements-traceability) maps every requirement in the paper's Appendix A to the code and a test.
 - **Running services**: an OpenID Federation trust anchor, two federated registries (US and EU), and two record keepers (authorization and provenance; activity).
-- **A transaction simulator**: seven scenarios that act out the paper's scenarios and check the expected outcome of each step.
+- **A transaction simulator**: seven scenarios that check the expected outcome of each step. Scenario 4 is the pilot the paper calls for: a disclosed organization, a privacy-protected person, unsupported claims, and revoked or compromised credentials.
 - **A pilot kit** for running a live federation with invited participants: an `aaf` command-line tool, a standalone relying party, and Docker and HTTPS configuration.
 
 | Guide | For |
@@ -16,9 +16,32 @@ A working implementation of the framework described in *The Accountable Agents F
 
 It needs only Node.js 22 or later and has no dependencies. All cryptography uses Node's built-in Ed25519, X25519, AES-GCM, SHA-256 and zlib.
 
+## How it maps to the paper
+
+The code keeps its earlier names. The paper's terms map to them like this:
+
+| The paper says | Here |
+|---|---|
+| directory | a **registry**, with the identity verifiers it relies on and the **record keepers** it accredits |
+| counterparty | **relying party** |
+| presentation, claims | the `AAF-Presentation` header: an accountability credential (the ID), and optionally authority and an approval |
+| ID | written `aaf:<directory>:…`; fields that carry it are still named `ppid` |
+| PPID (reusable) / unlinkable ID | an ID in `pairwise` / `ephemeral` (single-use) mode |
+| identity escrow, attribution | **resolution** under a legal order |
+| delegating agent | parent agent |
+
+Against the paper's Appendix A:
+
+- **Met:** every required property (PV-1, PV-3, PV-5, AG-1, AG-2, PR-1 to PR-7, PR-9, PR-10, RV-1, RV-2, ES-1, DR-1, DR-2), with one gap in RV-1: a registry cannot yet withdraw a single attribute before it expires.
+- **Optional properties built:** human and legal-entity proofing (PV-2), delegation (AG-3), key replacement (AG-5), agent PPIDs (PR-8).
+- **Optional properties not built:** Sybil resistance across directories (PV-4), several principals per agent (AG-4), principal and group PPIDs (PR-8), multi-party escrow (ES-2), conformity assessment (DR-3).
+- **Beyond the paper:** accredited record keepers, transfer of agents between principals, incident relay, bills of materials, activity logs, and passkey-bound account access. These are extensions, not requirements of the paper.
+
+Two limits matter most. The registry issues each ID on demand for a named relying party, so it learns which services an agent uses. And there is one trust anchor, though each relying party can choose which registries it accepts. [Spec §16](spec/AAF-SPEC.md#16-limitations-and-open-questions) lists the rest.
+
 ## Built on existing standards
 
-Existing specifications are used wherever one fits. The profile's own designs are limited to what none of them covers: the chain from a running agent to a verified legal person, PPIDs and their resolution, lineages and transfer, legal orders, and incident relay.
+Existing specifications are used wherever one fits. The profile's own designs are limited to what none of them covers: the chain from a running agent to a verified principal, IDs and their resolution under escrow, lineages and transfer, legal orders, and incident relay.
 
 | Concern | Specification |
 |---|---|
@@ -33,12 +56,12 @@ Existing specifications are used wherever one fits. The profile's own designs ar
 | Bills of materials | CycloneDX 1.6 |
 | Canonical JSON; Merkle logs | RFC 8785; RFC 9162 |
 
-[Spec §15](spec/AAF-SPEC.md#15-reuse-of-existing-specifications) accounts for every part.
+[Spec §15](spec/AAF-SPEC.md#15-reuse-of-existing-specifications) accounts for every part, and says which of the implementation options in the paper's Appendix C were chosen.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
+git clone https://github.com/christortheak/accountable-agents-sample-implementation.git && cd accountable-agents-sample-implementation
 ```
 
 ```bash
@@ -78,7 +101,7 @@ npm run demo
 Then open **http://localhost:4300** in Chrome, Safari, Edge or Firefox. Use `localhost`, not `127.0.0.1`, because passkeys are bound to a domain. You play the administrator of an account at a model-hosting platform:
 
 1. Register a passkey with Touch ID, Face ID or your device PIN.
-2. Approve your organization's accountable agent. You see who stands behind it without anyone being named.
+2. Approve your organization's accountable agent. You see what kind of principal stands behind it and how it was verified, without anyone being named.
 3. Replay the Hugging Face attack. The stolen token gets the rogue agents nothing, and their principal is notified on the first attempt.
 4. Approve a single deletion with your passkey, then watch the agent fail to reuse that approval.
 
@@ -93,30 +116,30 @@ Other commands:
 | `npm test` | Run the unit tests, service tests and every scenario as integration tests. |
 | `npm run rp` | Start the sandbox shop (a standalone relying party) at http://127.0.0.1:4400. |
 | `node src/cli/aaf.js help` | The `aaf` command-line tool for principals, agents and operators (see docs/PARTICIPATING.md). |
-| `npm run reset` | Wipe all state and keys, then regenerate the federation. Needed after upgrading from profile 0.1. |
+| `npm run reset` | Wipe all state and keys, then regenerate the federation. Needed after upgrading from an earlier profile: IDs and credentials changed format in 0.3. |
 | `node scripts/examples.js` | Regenerate the spec's example artifacts. |
 
 ## The scenarios
 
-| # | id | Paper section | What it shows |
+| # | id | Paper requirements shown | What it shows |
 |---|---|---|---|
-| 1 | `payment` | §4, Scenario 1 | A shopping agent at two merchants and a BSA-regulated bank. Pairwise PPIDs, selective disclosure, a refusal above the limit flagged as a SAR candidate, revocation, and resolution by a regulator without tipping off the subject. Also an automated check that the merchants cannot link what they received. |
-| 2 | `filing` | §4, Scenario 2 | Identity and authority checked separately. The agent cannot submit alone. The officer approves with a passkey, bound to the exact document, and a revoked officer's approval is refused. A dispute is settled from both sides' signed logs. A healthcare variant proves licensure without naming the provider. |
-| 3 | `hf` | §4, Scenario 3 | The Hugging Face incident replayed three ways. Branch A: unidentified agents are denied. Branch B, the framework alone: accountable agents using stolen credentials are logged from the first request; the principal is notified, revocation stops the attack, and a court order yields the principal, its agents and the model. Branch C, the framework plus passkeys: the platform binds account access to passkey-approved agents, so the stolen token is refused at the first request and nothing is read. Also covers rent-a-principal. |
-| 4 | `compute` | §5.6, open challenge | Paid GPUs for a disclosed organization, a privacy-protected person using ephemeral PPIDs, unsupported claims, a registry outage (`deferred`), and revoked or compromised credentials. |
-| 5 | `federation` | §3.1, Figure 0 | A parent agent in the US registry registers a sub-agent in the EU registry. Over-delegation is rejected. The incident relay, revocation and resolution cross registries. |
-| 6 | `audit` | §3.1–3.2 | A compromised activity record keeper rewrites a refusal. The relying party proves the tampering from its receipt, and the registry's chain of custody is unaffected. |
-| 7 | `lineage` | §3.1–3.2 | Ephemeral sub-agents that expire with their parents; lineage depth budgets; deregistration cutting off a branch. Transfer of an agent and its sub-agents to another principal: both sign, PPIDs and authority start over, and the old principal remains answerable for the time before. |
+| 1 | `payment` | PR-5 to PR-8, PR-10, RV-1, ES-1 | A shopping agent at two merchants and a BSA-regulated bank. The merchants learn only an ID and the purchasing permission. The bank sets acceptance criteria (kind of principal, assurance level, chain length) and is shown those. A refusal above the limit is flagged as a SAR candidate; then revocation, and attribution by a regulator without tipping off the subject. Also an automated check that the merchants cannot link what they received. |
+| 2 | `filing` | PR-4, PR-10 | Identity and authority checked separately. The agent cannot submit alone. The officer approves with a passkey, bound to the exact document, and a revoked officer's approval is refused. A dispute is settled from both sides' signed logs. A healthcare variant proves licensure without naming the provider. |
+| 3 | `hf` | RV-1, ES-1; paper §3.3 (rogue agents) | The Hugging Face incident replayed three ways. Branch A: unidentified agents are denied. Branch B, the framework alone: accountable agents using a stolen account token are logged from the first request; the principal is notified, revocation stops the attack, and a court order yields the principal, its agents and the model. Branch C, the framework plus passkeys: the platform binds account access to passkey-approved agents, so the stolen token is refused at the first request and nothing is read. Also rent-a-principal: the sham sponsor is identified, and a court order has the registry revoke the agent. |
+| 4 | `compute` | the pilot in the paper's conclusion; PR-7, ES-1 | Paid GPUs for a disclosed organization, a privacy-protected person using single-use IDs, unsupported claims, a registry outage (`deferred`), and revoked or compromised credentials. |
+| 5 | `federation` | AG-3; several directories | A parent agent in the US registry registers a sub-agent in the EU registry. Over-delegation is rejected. The incident relay, revocation and resolution cross registries. |
+| 6 | `audit` | paper §3.5 (verifiable activity records) | A compromised activity record keeper rewrites a refusal. The relying party proves the tampering from its receipt, and the registry's chain of custody is unaffected. |
+| 7 | `lineage` | AG-3, AG-5; transfer (an extension) | Short-lived sub-agents that expire with their parents; lineage depth budgets; deregistration cutting off a branch. Transfer of an agent and its sub-agents to another principal: both sign, IDs and authority start over, and the old principal remains answerable for the time before. |
 
 ## Code layout
 
-| Paper component | Code |
+| Component (the paper's term) | Code |
 |---|---|
 | Trust anchor (governance body) | [`src/trustanchor/`](src/trustanchor/) |
-| Registry | [`src/registry/`](src/registry/) |
-| Record keepers | [`src/recordkeeper/`](src/recordkeeper/) |
-| Principal, agent, provider, identity verifier, court or regulator | [`src/actors/`](src/actors/) |
-| Relying party: verification, classification, policy, evidence, passkey accounts | [`src/rp/`](src/rp/) |
+| Registry (directory) | [`src/registry/`](src/registry/) |
+| Record keepers (the record-keeping part of a directory) | [`src/recordkeeper/`](src/recordkeeper/) |
+| Principal, agent, provider, identity verifier, court or regulator (designated authority) | [`src/actors/`](src/actors/) |
+| Relying party (counterparty): verification, acceptance criteria, policy, evidence, passkey accounts | [`src/rp/`](src/rp/) |
 | Browser demo (real passkeys) | [`src/demo/`](src/demo/) |
 | `aaf` command-line tool | [`src/cli/`](src/cli/) |
 | Standalone relying party (sandbox shop) | [`src/rp/standalone.js`](src/rp/standalone.js) |

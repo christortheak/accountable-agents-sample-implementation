@@ -2,20 +2,20 @@
   "header": {
     "alg": "EdDSA",
     "typ": "entity-statement+jwt",
-    "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+    "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w"
   },
   "payload": {
     "iss": "https://registry-a.aaf.test",
     "sub": "https://registry-a.aaf.test",
-    "iat": 1792270758,
-    "exp": 1792357158,
+    "iat": 1795303625,
+    "exp": 1795390025,
     "jwks": {
       "keys": [
         {
           "crv": "Ed25519",
-          "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+          "x": "HXYcz_OUGUcl5_GGBUR0BVHX3fC7W0dt9bivJqx-YQQ",
           "kty": "OKP",
-          "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+          "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w",
           "use": "sig"
         }
       ]
@@ -29,24 +29,99 @@
           "keys": [
             {
               "crv": "Ed25519",
-              "x": "oz4u4K_iDMf15qTsiy6vHrezV69d7tOEtZSe98fV0yA",
+              "x": "HXYcz_OUGUcl5_GGBUR0BVHX3fC7W0dt9bivJqx-YQQ",
               "kty": "OKP",
-              "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo",
+              "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w",
               "use": "sig"
             },
             {
               "crv": "X25519",
-              "x": "tv_gJ4nbOVPpcQEUa1qAZhcvKqOgfXYIa-s9j8pLwQU",
+              "x": "anl_KFKRMaSyohz3X24RXZVklJfaSHBjbbQj5Q5fgxE",
               "kty": "OKP",
-              "kid": "MGhmCwGB7rXqqFE37vpEqZkuEl2ZgwaEttaxUVkWyQA",
+              "kid": "vo65_QcKFs51O2TwZzwm80-3QRw7JPUKMUDW1i-YwxI",
               "use": "enc"
             }
           ]
         },
-        "ppid_modes": [
+        "id_modes": [
           "pairwise",
           "ephemeral"
         ],
+        "practices": {
+          "identity_proofing": {
+            "verified_identities": [
+              "natural_person",
+              "legal_person"
+            ],
+            "method": "OpenID Connect for Identity Assurance verified_claims, recorded by a recognized identity verifier; each ID can show the trust framework and assurance level",
+            "identity_verifiers": [
+              "https://kyc.verifier.test"
+            ],
+            "sybil_resistance": "one principal record per verified identity: a legal entity by LEI or registration number, a person by name, jurisdiction and date of birth",
+            "reverification": "a verification expires; while it is lapsed the principal cannot register agents and its agents are suspended"
+          },
+          "authentication": {
+            "principals": "an Ed25519 key enrolled with the principal record; every request is signed (RFC 9421)",
+            "agents": "an Ed25519 key whose possession the agent proves at registration; a separate key per counterparty or per presentation is bound into each ID"
+          },
+          "ids": {
+            "modes": {
+              "pairwise": "reusable: at most one per agent and counterparty (a PPID)",
+              "ephemeral": "single-use and unlinkable"
+            },
+            "validity_seconds": 300,
+            "claims": "every claim except the ID is selectively disclosable by the agent"
+          },
+          "revocation": {
+            "by": [
+              "the principal",
+              "a delegating agent, for its sub-agents",
+              "this directory, for fraud or under its operating rules",
+              "a recognized authority, by legal order"
+            ],
+            "cascades_to_sub_agents": true,
+            "latency_seconds": {
+              "bound": 300,
+              "status_list_refresh": 10,
+              "without_status_check": 300
+            },
+            "status": "a published Token Status List, fetched whole: this directory does not learn which ID a counterparty checks"
+          },
+          "records": {
+            "held": [
+              "principal records with verified identity",
+              "agent records and their chains",
+              "custody history",
+              "pairwise IDs issued and their counterparties",
+              "incident reports",
+              "disclosures made"
+            ],
+            "not_held": [
+              "authorizations",
+              "bills of materials",
+              "activity (accredited record keepers hold these)",
+              "a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)"
+            ],
+            "retention_years": 5,
+            "kept_after_revocation": true,
+            "log": "every change is an entry in an append-only Merkle log with signed tree heads"
+          },
+          "disclosure": {
+            "to_counterparties": "identity claims only where the principal's disclosure policy names the claim and the counterparty",
+            "attribution": {
+              "process": "a legal order from a recognized authority that names the ID; single-use IDs also need the sealed reference the counterparty kept",
+              "authorities": [
+                "https://court.sdny.test",
+                "https://fincen.test"
+              ],
+              "logged": true,
+              "principal_notified": "yes, unless the order forbids it"
+            },
+            "incidents": "reports are relayed to the principal without telling the reporter who the principal is"
+          },
+          "signing_keys": "held in files on the operator's server; no hardware protection and no rotation (reference implementation)",
+          "security": "a reference implementation for discussion and pilots; not operated to a production standard"
+        },
         "policies": {
           "revocation_interval_seconds": 300,
           "attestation_ttl_seconds": 300,
@@ -59,6 +134,8 @@
           "attestations": "/v1/attestations",
           "status": "/v1/status",
           "resolutions": "/v1/resolutions",
+          "revocations": "/v1/revocations",
+          "practices": "/v1/practices",
           "incidents": "/v1/incidents",
           "trust_marks": "/federation/trust-mark",
           "transparency": "/v1/transparency/sth"
