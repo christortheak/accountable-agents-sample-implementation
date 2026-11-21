@@ -1,6 +1,6 @@
 {
-  "txn": "txn_9gfjt9bsxrt4ykea",
-  "at": "2026-10-17T20:59:18.142Z",
+  "txn": "txn_25pk5wwszdmthhz6",
+  "at": "2026-11-21T23:27:05.988Z",
   "action": "commerce.purchase",
   "params": {
     "amount": {
@@ -13,21 +13,22 @@
   "reasons": [],
   "tier": "standard",
   "classification": "ACCOUNTABLE_DISCLOSED",
-  "ppid": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
-  "ppid_mode": "pairwise",
+  "ppid": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm",
+  "id_mode": "pairwise",
   "registry": "https://registry-a.aaf.test",
   "sealed_ref": null,
   "root": {
     "type": "legal_person",
     "trust_framework": "aaf_kyb",
     "assurance": "high",
-    "verifier": "https://kyc.verifier.test",
+    "verifier": null,
+    "directory": null,
     "identity": {
-      "registration_number": "DE-1234567",
-      "legal_name": "Example Corp"
+      "legal_name": "Example Corp",
+      "registration_number": "DE-1234567"
     }
   },
-  "chain_length": 1,
+  "chain_length": null,
   "attributes": [],
   "authority_relied_on": [
     {
@@ -49,7 +50,7 @@
     "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…",
     "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…"
   ],
-  "presentation_digest": "X88MjKqLNO9KkHGzYtSU1Xe6xZiEoQmrPI5zehVWWNo",
+  "presentation_digest": "c0nIlsmPM9rXA1ND7MF1zfzfnhHJvZLsvzrmPXW7zRM",
   "checks": [
     {
       "name": "issued by a federation registry",
@@ -77,9 +78,9 @@
       "detail": "covers method, URL, body and presentation"
     },
     {
-      "name": "chain ends in a verified legal person",
+      "name": "ID resolves to a principal the directory verified",
       "ok": true,
-      "detail": "legal_person, aaf_kyb high, verified by https://kyc.verifier.test"
+      "detail": "also shown: legal_person, aaf_kyb high"
     },
     {
       "name": "status list entry (fetched now)",
@@ -120,10 +121,10 @@
   "activity_receipt": {
     "log_id": "https://records-2.aaf.test",
     "index": 0,
-    "leaf_hash": "59eT0DaQ3BxfzSU2GqN9svTCrmHzUc-Dfn64n_jZwHA",
+    "leaf_hash": "3uuBden-tAOhjAwmdpnUlW1GQJlG0mlfF2iRiWPSilg",
     "tree_size": 1,
     "inclusion_proof": [],
-    "sth": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1zdGgrand0Iiwia2lkIjoiRXBEUDNzdTVOb194VVJScWNoeXlBMjBMdFdFcUx5UEZvcmRUbzV0bWNHRSJ9.eyJsb2dfaWQiOiJodHRwczovL3JlY29yZHMtMi5hYWYudGVzdCIsInRyZWVfc2l6ZSI6MSwicm9vdF9oYXNoIjoiNTllVDBEYVEzQnhmelNVMkdxTjlzdlRDcm1IelVjLURmbjY0bl9qWndIQSIsInRpbWVzdGFtcCI6MTc5MjI3MDc1ODE0M30.O_KsdRg8CeIwiE8nMec5xXV-yWC_HU66S1Pgjhk52_wmCCVKY734GiZ3n-x31BGsBADBFw_FuwIcYd17K_YMCQ"
+    "sth": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1zdGgrand0Iiwia2lkIjoiamhuTjRYMnA2cHl5NTRwQmsyRWwzRHRQYXI3MjRybkNGemRyX0tUbjFEMCJ9.eyJsb2dfaWQiOiJodHRwczovL3JlY29yZHMtMi5hYWYudGVzdCIsInRyZWVfc2l6ZSI6MSwicm9vdF9oYXNoIjoiM3V1QmRlbi10QU9oakF3bWRwblVsVzFHUUpsRzBtbGZGMmlSaVdQU2lsZyIsInRpbWVzdGFtcCI6MTc5NTMwMzYyNTk4OX0.vDWJw3e0WDqf_NXDaiSo3llmZzj--A7s5XveDBo6BWn571hZf2NQSSgn4zv9PT00dhaQI5JJR03LzyHpZUPkBQ"
   },
   "account_gate": null
 }

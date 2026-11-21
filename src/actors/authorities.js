@@ -6,7 +6,7 @@ import { generateSigningKey, signJws, nowSeconds, randomId } from '../lib/crypto
 import { identityVerifiedClaims, attributeVerifiedClaims } from '../lib/ida.js';
 import { postJson, getJson, postSigned } from '../lib/http.js';
 import { TYP as RK_TYP } from '../recordkeeper/recordkeeper.js';
-import { TYP as REGISTRY_TYP } from '../registry/registry.js';
+import { TYP as REGISTRY_TYP, ORDER_SCOPE_REVOKE } from '../registry/registry.js';
 
 /** The party that builds or operates agent software. */
 export class AgentProvider {
@@ -52,7 +52,7 @@ export function cycloneDx(provider, build, components, incidentResponse) {
         name: build,
         supplier: { name: provider.name },
         externalReferences: contact ? [{ type: 'security-contact', url: `mailto:${contact}` }] : [],
-        // Incident-response instructions (paper §3.1) as CycloneDX properties.
+        // Incident-response instructions as CycloneDX properties.
         properties: [
           ...(incidentResponse.constrain_endpoint ? [{ name: 'aaf:incident-response:constrain-endpoint', value: incidentResponse.constrain_endpoint }] : []),
           { name: 'aaf:incident-response:notify-principal-via', value: incidentResponse.notify_principal_via ?? 'registry' },
@@ -98,7 +98,9 @@ export class IdentityVerifier {
   }
 }
 
-/** A court or regulator able to compel a registry to resolve PPIDs. */
+/** A court or regulator able to compel a registry to resolve an ID to its principal, or to revoke the agent behind it. */
+export { ORDER_SCOPE_REVOKE };
+
 export class ResolutionAuthority {
   constructor({ id, name, keys }) {
     this.id = id;
@@ -120,6 +122,11 @@ export class ResolutionAuthority {
 
   async resolve(registry, { order, ppid, sealedRef }) {
     return postJson(`${registry.url}/v1/resolutions`, { order, ppid, sealed_ref: sealedRef });
+  }
+
+  /** Have a registry revoke the registration behind an ID. The order must carry the revoke_registration scope. */
+  async revoke(registry, { order, ppid, sealedRef }) {
+    return postJson(`${registry.url}/v1/revocations`, { order, ppid, sealed_ref: sealedRef });
   }
 
   /** Read activity logs covered by an order (and by related PPIDs the registry returned). */

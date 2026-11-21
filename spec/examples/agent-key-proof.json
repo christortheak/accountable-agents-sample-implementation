@@ -1,0 +1,14 @@
+{
+  "header": {
+    "alg": "EdDSA",
+    "typ": "aaf-agent-proof+jwt",
+    "kid": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ"
+  },
+  "payload": {
+    "aud": "https://registry-a.aaf.test",
+    "purpose": "aaf-agent-registration",
+    "binding": "principal:prn_cewt16y2fhzq4rxk3wr1c76xxc",
+    "agent_key": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ",
+    "iat": 1795303625
+  }
+}

@@ -4,6 +4,7 @@
 import { generateSigningKey, signJws, nowSeconds, randomId, publicOf } from '../lib/crypto.js';
 import { postJson, sendSigned, postSigned } from '../lib/http.js';
 import { TYP as RK_TYP } from '../recordkeeper/recordkeeper.js';
+import { TYP as REGISTRY_TYP, AGENT_PROOF_PURPOSE } from '../registry/registry.js';
 import { toRar } from '../lib/scope.js';
 import { SoftwareAuthenticator } from '../lib/webauthn.js';
 
@@ -44,10 +45,12 @@ export class Principal {
     return this.call(`${this.registry.url}/v1/principals/${this.id}/disclosure-policy`, { policy }, 'PUT');
   }
 
-  /** Register an agent under this principal. The agent keeps its own long-term key. */
+  /** Register an agent under this principal. The agent keeps its own long-term key and proves it holds it. */
   async registerAgent(agent, { label, records, provider = null, expiresIn = null, lineage = null }) {
     const res = await this.call(`${this.registry.url}/v1/registrations`, {
-      agent_jwk: publicOf(agent.longTermKey.publicJwk), parent: { type: 'principal' }, records, provider, label, expires_in: expiresIn, lineage,
+      agent_jwk: publicOf(agent.longTermKey.publicJwk),
+      agent_proof: agent.keyProof(this.registry.id, AGENT_PROOF_PURPOSE.registration, `principal:${this.id}`),
+      parent: { type: 'principal' }, records, provider, label, expires_in: expiresIn, lineage,
     });
     agent.attach({ registry: this.registry, registrationId: res.registration_id, receipt: res.receipt, records });
     this.receipts.push(res.receipt);
@@ -120,7 +123,9 @@ export class Principal {
    */
   async acceptTransfer(offerId, agent) {
     const newKey = generateSigningKey();
-    const res = await this.call(`${this.registry.url}/v1/transfer-offers/${offerId}/accept`, { agent_jwk: publicOf(newKey.publicJwk) });
+    const res = await this.call(`${this.registry.url}/v1/transfer-offers/${offerId}/accept`, {
+      agent_jwk: publicOf(newKey.publicJwk), agent_proof: keyProof(newKey, this.registry.id, AGENT_PROOF_PURPOSE.transfer, offerId),
+    });
     agent.rekey(newKey, res.receipt);
     this.receipts.push(res.receipt);
     return res;
@@ -128,7 +133,9 @@ export class Principal {
 
   async rotateAgentKey(agent) {
     const newKey = generateSigningKey();
-    const res = await this.call(`${agent.registry.url}/v1/registrations/${agent.registrationId}/rotate-key`, { agent_jwk: publicOf(newKey.publicJwk) });
+    const res = await this.call(`${agent.registry.url}/v1/registrations/${agent.registrationId}/rotate-key`, {
+      agent_jwk: publicOf(newKey.publicJwk), agent_proof: keyProof(newKey, agent.registry.id, AGENT_PROOF_PURPOSE.rotation, agent.registrationId),
+    });
     agent.rekey(newKey, res.receipt);
     return res;
   }
@@ -142,6 +149,10 @@ export class Principal {
     return res.notifications;
   }
 }
+
+/** Proof of possession of a fresh agent key (the principal holds it until the agent adopts it). */
+const keyProof = (key, registryId, purpose, binding) =>
+  signJws({ aud: registryId, purpose, binding, agent_key: key.kid, iat: nowSeconds() }, key, { typ: REGISTRY_TYP.agentProof });
 
 /**
  * A human acting in a designated role (for example a compliance officer). They

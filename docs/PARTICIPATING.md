@@ -10,7 +10,7 @@ Nothing real is bought or sold. The shop only records decisions.
 - This repository:
 
 ```bash
-git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
+git clone https://github.com/christortheak/accountable-agents-sample-implementation.git && cd accountable-agents-sample-implementation
 ```
 
 To get the `aaf` command on your path:
@@ -74,7 +74,7 @@ The agent has its own keys. The grant is what it may do, and it is kept by the r
 aaf act helper https://shop.example.org commerce.purchase --params '{"amount":{"value":12,"currency":"USD"},"item":"a book"}'
 ```
 
-The output shows the shop's decision, how your agent appeared to the shop (its PPID), and what it disclosed. Then open `https://shop.example.org` in a browser. Its page lists every decision, with what the shop learned and what stayed hidden. Try:
+The output shows the shop's decision, how your agent appeared to the shop (its ID), and what it disclosed. By default that is the ID and the permission the purchase needs, and nothing about you. Then open `https://shop.example.org` in a browser. Its page lists every decision, with what the shop learned and what stayed hidden. Try:
 - **A larger purchase.** The shop asks for more: your identity. Agree to share it with this shop only:
 
 ```text
@@ -82,7 +82,8 @@ aaf disclose --to https://shop.example.org --claims legal_name
 ```
 
   Then repeat the purchase.
-- **`--ephemeral`.** A fresh identifier for every request, so even the shop can't link your visits.
+- **`--ephemeral`.** A fresh, single-use ID for every request, so even the shop can't link your visits. Without it your agent shows the shop the same ID each time (a PPID), which is what an account or a rate limit needs.
+- **`--disclose principal_type,assurance`.** Show more than the shop asked for: what kind of principal you are and how strongly you were verified, still without your name.
 - **`content.read` or `compute.provision`.** Other actions the shop offers. Your agent needs a grant for each, except `content.read`, which is open to everyone.
 
 Any AI agent that can run shell commands, such as a coding assistant, can transact through `aaf act` on your behalf.
@@ -107,7 +108,7 @@ The worker lapses after an hour, can't outlive its parent, and can only ever be 
 |---|---|
 | `aaf revoke helper --reason compromised` | Ends an agent and everything below it, at once. |
 | `aaf transfer offer helper --to <their principal id>` | Hands an agent to another participant. They accept with `aaf transfer accept <offer-id> --as <name>`. The agent gets new identifiers and a fresh key, and starts with no authority. You remain answerable for what it did before the transfer. |
-| `aaf notifications` | Shows incident reports, transfers, and any resolution of your agents' identity under a (demonstration) court order. |
+| `aaf notifications` | Shows incident reports, transfers, and any resolution or revocation of your agents under a (demonstration) court order. |
 | `aaf whoami` · `aaf agent list` · `aaf federation` | Shows where things stand. |
 
 ## Your keys
@@ -117,16 +118,16 @@ Everything is in `~/.aaf`:
 - each agent's key and grants;
 - the federation's address and key.
 
-Keep the folder private. There is no recovery: if you lose it, enroll again and register new agents. `aaf agent forget <name>` deletes an agent's local keys; use it after you've transferred the agent to someone else.
+Keep the folder private. There is no key recovery. The registry keeps one record per verified person, so if you lose the folder, ask your operator to close your old record; then enroll again and register new agents. `aaf agent forget <name>` deletes an agent's local keys; use it after you've transferred the agent to someone else.
 
 ## What others can see
 
 | Party | Sees |
 |---|---|
-| The shop | a per-shop identifier for your agent; that a verified person stands behind it, and who verified them; the authority relevant to each request; your name only if you agreed to `disclose` it to that shop |
-| The registry (the operator) | who you are, your agents and their status, and the identifiers it issued |
+| The shop | an ID for your agent that only this shop sees; that the registry verified someone who answers for it; the authority relevant to each request. If the shop's rules ask: what kind of principal you are, how strongly you were verified, and how many agents are in the chain. Your name only if you agreed to `disclose` it to that shop |
+| The registry (the operator) | who you are, your agents and their status, the IDs it issued, and which shops your agents asked for IDs for. Not what they did there |
 | The record keeper | your grants and the agents' activity logs |
-| A court order (simulated by the operator) | which principal stood behind an agent at the time; you are notified |
+| A court order (simulated by the operator) | which principal stood behind an agent at the time; it can also have the agent revoked; you are notified |
 
 ## Rehearsing on your own computer
 

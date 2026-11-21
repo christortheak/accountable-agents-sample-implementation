@@ -79,7 +79,7 @@ try {
 
   // Presentation to a relying party
   const rp = await startRelyingParty({
-    id: 'shop.example', name: 'Shop', trust: t, requests: { identity: true },
+    id: 'shop.example', name: 'Shop', trust: t, requests: { identity: true, principal_type: true, assurance: true },
     rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] },
     handlers: { 'commerce.purchase': async () => ({ order: 'o-1' }) },
   });
@@ -125,6 +125,9 @@ try {
   const order = court.order({ caseId: 'Example v. Doe', ppids: [res.ppid], relyingParty: rp.id, requester: 'Shop', scope: ['root_principal_identity', 'chain'] });
   write('legal-order', jws(order));
   write('resolution-result', (await court.resolve(regA, { order, ppid: res.ppid })).result);
+  // What the registry publishes about itself, and an agent's proof that it holds its key
+  write('registry-practices', await (await fetch(`${regA.url}/v1/practices`)).json());
+  write('agent-key-proof', jws(agent.keyProof(regA.id, 'aaf-agent-registration', `principal:${org.id}`)));
   write('provenance-record.cyclonedx', jws((await (await fetch(`${rk1.url}/v1/provenance/${provenanceId}`)).json()).record));
 
   // A designated officer approves with a passkey (WebAuthn at the record keeper)

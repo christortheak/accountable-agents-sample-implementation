@@ -2,20 +2,20 @@
   "header": {
     "alg": "EdDSA",
     "typ": "entity-statement+jwt",
-    "kid": "tgHrxxI67Z-q719js6nU7-4Z9yFANeDoovRfFqfb-94"
+    "kid": "JKd3KUSxvKoemmLNOSObgnGdQM8H0FBfyTY_rOeB6PQ"
   },
   "payload": {
     "iss": "https://federation.aaf.test",
     "sub": "https://federation.aaf.test",
-    "iat": 1792270758,
-    "exp": 1792357158,
+    "iat": 1795303625,
+    "exp": 1795390025,
     "jwks": {
       "keys": [
         {
           "crv": "Ed25519",
-          "x": "D7Qqfy3460wWQ5OqyxJ215LgDIL78C-7R7_ODr8ipTU",
+          "x": "FB3IRgPrjrDbe83UOET9DE6agsRcG052Wi-HyLQoKHA",
           "kty": "OKP",
-          "kid": "tgHrxxI67Z-q719js6nU7-4Z9yFANeDoovRfFqfb-94",
+          "kid": "JKd3KUSxvKoemmLNOSObgnGdQM8H0FBfyTY_rOeB6PQ",
           "use": "sig"
         }
       ]

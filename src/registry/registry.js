@@ -1,8 +1,9 @@
-// Registry: verifies principals (via trusted identity verifiers), registers
-// agents into chains that end at a verified legal person, issues PPIDs and
-// accountability attestations, tracks status, points to record keepers,
-// accredits record keepers, and resolves PPIDs to root principals only under
-// consent or legal process.
+// Registry (the paper's "directory"): verifies principals (via trusted
+// identity verifiers), registers agents into chains that end at a verified
+// principal, issues IDs (reusable pairwise PPIDs and single-use IDs) in
+// accountability credentials, tracks status, points to record keepers,
+// accredits record keepers, and recovers the principal behind an ID only
+// under consent or legal process (identity escrow).
 //
 // State is event-sourced from the registry's own Merkle log, so every change
 // the registry makes is covered by its signed tree heads.
@@ -11,7 +12,7 @@ import {
   base32, hmac, randomId, randomBytes, nowSeconds, signJws, verifyJws, decodeJws, sealJwe, openJwe,
   thumbprint, sha256b64u, digestOf, publicOf,
 } from '../lib/crypto.js';
-import { issueSdJwt, sd, verifySdJwt } from '../lib/sd-jwt.js';
+import { issueSdJwt, sd, sdPad, verifySdJwt } from '../lib/sd-jwt.js';
 import { MerkleLog } from '../lib/log.js';
 import { attributeName, attributeSource } from '../lib/ida.js';
 import { SD_JWT_VC_TYP, vct } from '../lib/credentials.js';
@@ -30,7 +31,32 @@ export const TYP = {
   resolution: 'aaf-resolution+jwt',
   order: 'aaf-legal-order+jwt',
   forward: 'aaf-resolution-forward+jwt',
+  agentProof: 'aaf-agent-proof+jwt',
 };
+
+/** What an agent's proof of possession is for (AG-2, AG-5). */
+export const AGENT_PROOF_PURPOSE = { registration: 'aaf-agent-registration', rotation: 'aaf-agent-key-rotation', transfer: 'aaf-agent-transfer' };
+
+/** Scope a legal order must carry before a registry revokes under it. */
+export const ORDER_SCOPE_REVOKE = 'revoke_registration';
+
+/** Decoy padding for the accountability credential, so digest counts do not distinguish principals. */
+const PAD = { claims: 12, attributes: 4, records: 4 };
+
+/**
+ * The sample rule for "one verified identity, one principal record" (PV-3):
+ * a legal entity is keyed by its LEI or registration number, a person by name,
+ * jurisdiction and date of birth where known. A real directory would key on
+ * the evidence its identity proofing produced.
+ */
+export function identityKey(type, identity = {}) {
+  const norm = (v) => String(v ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  let basis;
+  if (type === 'legal_person' && identity.lei) basis = { lei: norm(identity.lei) };
+  else if (type === 'legal_person' && identity.registration_number) basis = { jurisdiction: norm(identity.jurisdiction), registration_number: norm(identity.registration_number) };
+  else basis = { name: norm(identity.legal_name), jurisdiction: norm(identity.jurisdiction), date_of_birth: norm(identity.date_of_birth) };
+  return digestOf({ type, ...basis });
+}
 
 export const REVOCATION_REASONS = [
   'principal_request', 'compromised', 'authority_ended', 'fraud', 'legal_order', 'superseded', 'parent_transferred',
@@ -46,8 +72,14 @@ const DISCLOSABLE_IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration
  */
 export const regBinding = (registrationId, version, ppid) => sha256b64u(`aaf-binding|${registrationId}|${version}|${ppid}`);
 
+/**
+ * IDs are written aaf:<directory host>:p_… (a PPID: reusable, one per agent and
+ * counterparty) or aaf:<directory host>:e_… (single-use). The host names the
+ * issuing directory. The earlier "ppid:" prefix is still read.
+ */
+export const ID_PREFIX = 'aaf';
 export const registryOfPpid = (ppid) => {
-  const m = /^ppid:([^:]+):[pe]_[0-9a-z]+$/.exec(ppid ?? '');
+  const m = /^(?:aaf|ppid):([^:]+):[pe]_[0-9a-z]+$/.exec(ppid ?? '');
   return m ? m[1] : null;
 };
 
@@ -62,6 +94,7 @@ export class Registry {
     this.trust = trustList;
     this.policies = trustList.policies;
     this.principals = new Map();
+    this.identityKeys = new Map(); // verified identity -> principal id (PV-3)
     this.registrations = new Map();
     this.agentKeys = new Map(); // thumbprint -> registration id
     this.ppids = new Map(); // pairwise ppid -> { registration, audience }
@@ -132,9 +165,21 @@ export class Registry {
           enrolled_at: at,
         });
         break;
-      case 'principal.verified':
-        this.principals.get(data.id).verification = { ...data, status: 'verified' };
+      case 'principal.verified': {
+        const p = this.principals.get(data.id);
+        p.verification = { ...data, status: 'verified' };
+        if (data.identity_key) {
+          p.identity_key = data.identity_key;
+          this.identityKeys.set(data.identity_key, p.id);
+        }
         break;
+      }
+      case 'principal.closed': {
+        const p = this.principals.get(data.id);
+        p.closed = { reason: data.reason, at };
+        if (p.identity_key && this.identityKeys.get(p.identity_key) === p.id) this.identityKeys.delete(p.identity_key);
+        break;
+      }
       case 'principal.attributes_set': {
         const p = this.principals.get(data.id);
         const byName = new Map(p.attributes.map((a) => [a.name, a]));
@@ -223,7 +268,8 @@ export class Registry {
       jurisdiction: this.jurisdiction,
       endpoint_base: this.url,
       jwks: jwksOf(this.keys.signing, this.keys.encryption),
-      ppid_modes: ['pairwise', 'ephemeral'],
+      id_modes: ['pairwise', 'ephemeral'],
+      practices: this.practices(),
       policies: {
         revocation_interval_seconds: this.policies.revocationIntervalSeconds,
         attestation_ttl_seconds: this.policies.attestationTtlSeconds,
@@ -236,10 +282,65 @@ export class Registry {
         attestations: '/v1/attestations',
         status: '/v1/status',
         resolutions: '/v1/resolutions',
+        revocations: '/v1/revocations',
+        practices: '/v1/practices',
         incidents: '/v1/incidents',
         trust_marks: '/federation/trust-mark',
         transparency: '/v1/transparency/sth',
       },
+    };
+  }
+
+  /**
+   * Published practices (paper Appendix A, DR-1): what a counterparty or
+   * principal needs to know to decide whether to rely on this directory. Every
+   * statement here describes what this code does.
+   */
+  practices() {
+    const pol = this.policies;
+    const ids = (list) => (list ?? []).map((e) => e.id);
+    return {
+      identity_proofing: {
+        verified_identities: ['natural_person', 'legal_person'],
+        method: 'OpenID Connect for Identity Assurance verified_claims, recorded by a recognized identity verifier; each ID can show the trust framework and assurance level',
+        identity_verifiers: ids(this.trust.doc?.verifiers),
+        sybil_resistance: 'one principal record per verified identity: a legal entity by LEI or registration number, a person by name, jurisdiction and date of birth',
+        reverification: 'a verification expires; while it is lapsed the principal cannot register agents and its agents are suspended',
+      },
+      authentication: {
+        principals: 'an Ed25519 key enrolled with the principal record; every request is signed (RFC 9421)',
+        agents: 'an Ed25519 key whose possession the agent proves at registration; a separate key per counterparty or per presentation is bound into each ID',
+      },
+      ids: {
+        modes: { pairwise: 'reusable: at most one per agent and counterparty (a PPID)', ephemeral: 'single-use and unlinkable' },
+        validity_seconds: pol.attestationTtlSeconds,
+        claims: 'every claim except the ID is selectively disclosable by the agent',
+      },
+      revocation: {
+        by: ['the principal', 'a delegating agent, for its sub-agents', 'this directory, for fraud or under its operating rules', 'a recognized authority, by legal order'],
+        cascades_to_sub_agents: true,
+        latency_seconds: { bound: pol.revocationIntervalSeconds, status_list_refresh: pol.statusListTtlSeconds ?? 10, without_status_check: pol.attestationTtlSeconds },
+        status: 'a published Token Status List, fetched whole: this directory does not learn which ID a counterparty checks',
+      },
+      records: {
+        held: ['principal records with verified identity', 'agent records and their chains', 'custody history', 'pairwise IDs issued and their counterparties', 'incident reports', 'disclosures made'],
+        not_held: ['authorizations', 'bills of materials', 'activity (accredited record keepers hold these)', 'a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)'],
+        retention_years: pol.recordRetentionYears,
+        kept_after_revocation: true,
+        log: 'every change is an entry in an append-only Merkle log with signed tree heads',
+      },
+      disclosure: {
+        to_counterparties: 'identity claims only where the principal\'s disclosure policy names the claim and the counterparty',
+        attribution: {
+          process: 'a legal order from a recognized authority that names the ID; single-use IDs also need the sealed reference the counterparty kept',
+          authorities: ids(this.trust.doc?.resolution_authorities),
+          logged: true,
+          principal_notified: 'yes, unless the order forbids it',
+        },
+        incidents: 'reports are relayed to the principal without telling the reporter who the principal is',
+      },
+      signing_keys: 'held in files on the operator\'s server; no hardware protection and no rotation (reference implementation)',
+      security: 'a reference implementation for discussion and pilots; not operated to a production standard',
     };
   }
 
@@ -299,7 +400,14 @@ export class Registry {
     if (digestOf(vc.claims) !== digestOf(p.identity)) {
       throw new HttpError(409, 'identity_mismatch', 'verified claims do not match the enrolled identity claims');
     }
-    const data = { id: principalId, verifier: verifierId, ...vc.verification, expires_at: payload.expires_at };
+    if (p.closed) throw new HttpError(409, 'principal_closed', 'this principal record has been closed');
+    // One verified identity has one principal record (PV-3).
+    const key = identityKey(p.type, vc.claims);
+    const existing = this.identityKeys.get(key);
+    if (existing && existing !== principalId) {
+      throw new HttpError(409, 'duplicate_identity', `this verified identity already has a principal record here (${existing})`, { existing_principal: existing });
+    }
+    const data = { id: principalId, verifier: verifierId, ...vc.verification, expires_at: payload.expires_at, identity_key: key };
     this.commit('principal.verified', data);
     if (payload.attributes?.length) this.recordAttributes(principalId, verifierId, payload.attributes);
     return { principal_id: principalId, verification: 'verified', trust_framework: data.trust_framework, assurance_level: data.assurance_level };
@@ -334,7 +442,22 @@ export class Registry {
     return p;
   }
 
+  /**
+   * Close a principal record (operator): the identity may then enroll again,
+   * for example after losing its key. The record and its agents' history are
+   * kept, so IDs issued under it can still be attributed; its agents stop working.
+   */
+  async closePrincipal(principalId, reason = 'operator') {
+    const p = this.mustPrincipal(principalId);
+    if (p.closed) return { principal_id: p.id, status: 'closed', already: true };
+    this.commit('principal.closed', { id: p.id, reason });
+    const regs = [...this.registrations.values()].filter((r) => r.root_principal === p.id);
+    const peersNotified = await this.pushStatusChange(regs);
+    return { principal_id: p.id, status: 'closed', registrations_suspended: regs.filter((r) => r.status === 'active').length, peers_notified: peersNotified };
+  }
+
   principalVerificationValid(p) {
+    if (p.closed) return false;
     if (p.verification?.status !== 'verified') return false;
     return !p.verification.expires_at || new Date(p.verification.expires_at) > new Date();
   }
@@ -353,6 +476,9 @@ export class Registry {
     if (!agentJwk || agentJwk.kty !== 'OKP' || agentJwk.crv !== 'Ed25519') throw new HttpError(400, 'invalid_agent_key', 'agent_jwk must be an Ed25519 public JWK');
     const agentKey = thumbprint(agentJwk);
     if (this.agentKeys.has(agentKey)) throw new HttpError(409, 'agent_key_in_use', 'agent key already registered');
+    // The agent itself proves it holds the key, for this registrant (AG-2).
+    const registrant = parent.type === 'remote_agent' ? `jkt:${jwk ? thumbprint(jwk) : ''}` : header.kid ?? '';
+    this.checkAgentProof(payload.agent_proof, agentJwk, { purpose: AGENT_PROOF_PURPOSE.registration, binding: registrant });
 
     let parentLink;
     let rootPrincipal = null;
@@ -364,7 +490,7 @@ export class Registry {
       if (!kid.startsWith('principal:')) throw new HttpError(401, 'wrong_signer', 'principal registrations must be signed by the principal');
       const p = this.mustPrincipal(kid.slice('principal:'.length));
       if (!this.principalVerificationValid(p)) {
-        throw new HttpError(403, 'principal_not_verified', 'the principal must be a verified legal person before registering agents');
+        throw new HttpError(403, 'principal_not_verified', 'the principal must be verified before registering agents');
       }
       parentLink = { type: 'principal', id: p.id, key_thumbprints: p.keys.map(thumbprint) };
       rootPrincipal = p.id;
@@ -421,6 +547,25 @@ export class Registry {
     const reg = this.registrations.get(id);
     const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6;
     return { registration_id: id, receipt: this.receiptFor(reg), depth, expires_at: reg.expires_at, issuance_ms: Math.round(elapsedMs * 100) / 100 };
+  }
+
+  /**
+   * Proof of possession of an agent key: a JWS signed with that key, naming
+   * this directory, what the proof is for, and what it is bound to (the
+   * registrant, the registration or the transfer offer).
+   */
+  checkAgentProof(proof, agentJwk, { purpose, binding }) {
+    if (!proof) throw new HttpError(400, 'agent_proof_required', 'the agent must prove it holds the key being bound to its record (agent_proof)');
+    let claims;
+    try {
+      claims = verifyJws(proof, agentJwk, { typ: TYP.agentProof }).payload;
+    } catch (err) {
+      throw new HttpError(401, 'invalid_agent_proof', `agent proof not signed by the agent key: ${err.message}`);
+    }
+    const fresh = typeof claims.iat === 'number' && Math.abs(nowSeconds() - claims.iat) <= 120;
+    if (claims.aud !== this.id || claims.purpose !== purpose || claims.binding !== binding || claims.agent_key !== thumbprint(agentJwk) || !fresh) {
+      throw new HttpError(401, 'invalid_agent_proof', 'agent proof is stale or was made for a different directory, purpose or registrant');
+    }
   }
 
   /** Current registration receipt: who the agent answers to now, at which chain version. */
@@ -489,6 +634,7 @@ export class Registry {
     const jwk = payload.agent_jwk;
     if (!jwk || jwk.crv !== 'Ed25519') throw new HttpError(400, 'invalid_agent_key', 'agent_jwk must be an Ed25519 public JWK');
     if (this.agentKeys.has(thumbprint(jwk))) throw new HttpError(409, 'agent_key_in_use', 'agent key already registered');
+    this.checkAgentProof(payload.agent_proof, jwk, { purpose: AGENT_PROOF_PURPOSE.rotation, binding: reg.id });
     this.commit('registration.key_rotated', { id: reg.id, agent_jwk: publicOf(jwk), by: kid });
     return { registration_id: reg.id, receipt: this.receiptFor(reg) };
   }
@@ -552,6 +698,7 @@ export class Registry {
     const jwk = payload.agent_jwk;
     if (!jwk || jwk.crv !== 'Ed25519') throw new HttpError(400, 'invalid_agent_key', 'the new owner must supply a fresh Ed25519 agent key');
     if (this.agentKeys.has(thumbprint(jwk))) throw new HttpError(409, 'agent_key_in_use', 'the new agent key must be fresh');
+    this.checkAgentProof(payload.agent_proof, jwk, { purpose: AGENT_PROOF_PURPOSE.transfer, binding: offerId });
 
     const descendants = this.descendants(reg);
     const live = await this.activeDescendants(reg);
@@ -594,11 +741,15 @@ export class Registry {
     if (thumbprint(att.cnf.jwk) !== thumbprint(signerJwk)) throw new HttpError(401, 'key_mismatch', 'request not signed by the attested key');
     const status = await this.remoteStatus(iss, att.sub);
     if (status.status !== 'active') throw new HttpError(403, 'parent_inactive', `parent at ${iss} is ${status.status}`);
-    const root = att.accountability.root_principal;
+    // To vouch for a sub-agent we need what the parent's directory says about the chain, so the parent must disclose it to us.
+    const a = att.accountability ?? {};
+    if (!a.principal_type || !a.assurance || !a.verification_source || !Number.isInteger(a.chain_length)) {
+      throw new HttpError(400, 'chain_summary_required', 'the parent must disclose principal_type, assurance, verification_source and chain_length to this directory');
+    }
     return {
       link: { type: 'remote_agent', registry: iss, ppid: att.sub, reg_binding: att.reg_binding, cnf_thumbprint: thumbprint(signerJwk) },
-      rootSummary: { type: root.type, verified: root.verified, verification: root.verification, registry: iss },
-      depth: att.accountability.chain_length + 1,
+      rootSummary: { type: a.principal_type, assurance: a.assurance, verification_source: a.verification_source, registry: a.principal_directory ?? iss },
+      depth: a.chain_length + 1,
     };
   }
 
@@ -680,7 +831,7 @@ export class Registry {
     const parent = reg.parent;
     if (parent.type === 'principal') {
       const p = this.principals.get(parent.id);
-      if (!this.principalVerificationValid(p)) return { status: 'suspended', reason: 'principal_verification_lapsed' };
+      if (!this.principalVerificationValid(p)) return { status: 'suspended', reason: p.closed ? 'principal_record_closed' : 'principal_verification_lapsed' };
     } else if (parent.type === 'agent') {
       const up = await this.registrationStatus(this.registrations.get(parent.registration));
       if (up.status !== 'active') return { status: up.status, reason: `upstream:${up.reason}` };
@@ -719,7 +870,7 @@ export class Registry {
   /** One value per (registration, chain version, audience): a new principal relationship means new PPIDs. */
   pairwisePpid(registrationId, version, audience) {
     const mac = hmac(Buffer.from(this.keys.pairwiseSecret, 'base64url'), `${registrationId}|${version}|${audience}`);
-    return `ppid:${this.host}:p_${base32(mac).slice(0, 26)}`;
+    return `${ID_PREFIX}:${this.host}:p_${base32(mac).slice(0, 26)}`;
   }
 
   rootOf(reg) {
@@ -756,36 +907,29 @@ export class Registry {
       if (!this.ppids.has(ppid)) this.commit('ppid.issued', { ppid, registration: reg.id, audience, version, root: rootSnapshot, status_idx: allocateIndex(this.statusIndex) });
       statusIdx = this.ppids.get(ppid).status_idx;
     } else {
-      ppid = `ppid:${this.host}:e_${base32(randomBytes(16)).slice(0, 26)}`;
+      ppid = `${ID_PREFIX}:${this.host}:e_${base32(randomBytes(16)).slice(0, 26)}`;
       sealedRef = sealJwe({ ppid, registration: reg.id, audience, version, root: rootSnapshot, iat: now }, this.keys.encryption.publicJwk);
       statusIdx = allocateIndex(this.statusIndex);
       this.rememberEphemeral({ idx: statusIdx, ephemeral: true, registration: reg.id, version, exp });
     }
 
+    // Everything about the principal and the chain is selectively disclosable:
+    // the ID alone is a valid presentation (PR-1), and the agent adds what the
+    // counterparty asks for and the principal allows (PR-5, PR-10). Long-lived
+    // facts are coarsened: an exact time repeated across counterparties would
+    // be a correlation handle.
     const root = this.rootOf(reg);
-    let rootPrincipal;
+    const claims = {};
     let attributes = [];
     if (root.local) {
       const p = root.principal;
+      claims.principal_type = sd(p.type);
+      claims.assurance = sd({ trust_framework: p.verification.trust_framework, assurance_level: p.verification.assurance_level });
+      claims.verification_source = sd({ verifier: p.verification.verifier, time: p.verification.time.slice(0, 7) });
+      claims.principal_directory = sd(this.id);
       const disclose = p.disclosure.identity;
-      const identityAllowed = disclose.audiences.includes(audience) || disclose.audiences.includes('*');
-      rootPrincipal = {
-        type: p.type,
-        verified: true,
-        // OpenID Connect for Identity Assurance verification summary. Long-lived
-        // facts are coarsened: an exact time repeated across relying parties
-        // would be a correlation handle.
-        verification: {
-          trust_framework: p.verification.trust_framework,
-          assurance_level: p.verification.assurance_level,
-          time: p.verification.time.slice(0, 7),
-          verifier: p.verification.verifier,
-        },
-        registry: this.id,
-        identity: identityAllowed ? 'disclosable' : 'protected',
-      };
-      if (identityAllowed) {
-        rootPrincipal.disclosed_identity = Object.fromEntries(disclose.claims.filter((c) => p.identity[c] !== undefined).map((c) => [c, sd(p.identity[c])]));
+      if (disclose.audiences.includes(audience) || disclose.audiences.includes('*')) {
+        for (const c of disclose.claims) if (p.identity[c] !== undefined) claims[c] = sd(p.identity[c]);
       }
       attributes = p.attributes
         .filter((a) => p.disclosure.attributes.includes(a.name))
@@ -803,7 +947,12 @@ export class Registry {
           }),
         );
     } else {
-      rootPrincipal = { ...root.summary, identity: 'protected' };
+      // The principal is registered with another directory: pass on what that directory attested.
+      const sum = root.summary ?? {};
+      if (sum.type) claims.principal_type = sd(sum.type);
+      if (sum.assurance) claims.assurance = sd(sum.assurance);
+      if (sum.verification_source) claims.verification_source = sd(sum.verification_source);
+      if (sum.registry) claims.principal_directory = sd(sum.registry);
     }
 
     const payload = {
@@ -815,15 +964,12 @@ export class Registry {
       exp,
       jti: randomId('att', 12),
       cnf: { jwk: publicOf(cnfJwk) },
-      ppid_mode: mode,
+      // pairwise: a PPID, at most one per agent and counterparty; ephemeral: single-use.
+      id_mode: mode,
       reg_binding: regBinding(reg.id, version, ppid),
-      accountability: {
-        status: 'accountable',
-        root_principal: rootPrincipal,
-        chain_length: reg.depth,
-        attributes,
-      },
-      records: reg.records.map((r) => sd(r)),
+      // The directory's statement: this ID resolves to a principal it verified under its published practices.
+      accountability: sdPad({ status: 'accountable', ...claims, chain_length: sd(reg.depth), attributes: sdPad(attributes, PAD.attributes) }, PAD.claims),
+      records: sdPad(reg.records.map((r) => sd(r)), PAD.records),
       status: { status_list: { idx: statusIdx, uri: this.statusListUri } },
       ...(sealedRef ? { sealed_ref: sealedRef } : {}),
     };
@@ -833,20 +979,20 @@ export class Registry {
 
   /** Map a PPID (plus sealed reference for ephemeral PPIDs) to a registration, the chain version and the root at issuance. */
   locate(ppid, sealedRef) {
-    if (registryOfPpid(ppid) !== this.host) throw new HttpError(400, 'foreign_ppid', `ppid was not issued by ${this.id}`);
+    if (registryOfPpid(ppid) !== this.host) throw new HttpError(400, 'foreign_ppid', `this ID was not issued by ${this.id}`);
     if (ppid.includes(':p_')) {
       const rec = this.ppids.get(ppid);
-      if (!rec) throw new HttpError(404, 'unknown_ppid', 'ppid not recognized');
+      if (!rec) throw new HttpError(404, 'unknown_ppid', 'ID not recognized');
       return { registration: this.registrations.get(rec.registration), audience: rec.audience, version: rec.version ?? 0, root: rec.root, issuedAt: rec.issued_at };
     }
-    if (!sealedRef) throw new HttpError(400, 'sealed_ref_required', 'ephemeral PPIDs resolve only with their sealed reference');
+    if (!sealedRef) throw new HttpError(400, 'sealed_ref_required', 'single-use IDs resolve only with the sealed reference the counterparty kept');
     let opened;
     try {
       opened = openJwe(sealedRef, this.keys.encryption.privateJwk).payload;
     } catch {
       throw new HttpError(400, 'invalid_sealed_ref', 'sealed reference could not be opened');
     }
-    if (opened.ppid !== ppid) throw new HttpError(400, 'sealed_ref_mismatch', 'sealed reference belongs to a different PPID');
+    if (opened.ppid !== ppid) throw new HttpError(400, 'sealed_ref_mismatch', 'sealed reference belongs to a different ID');
     return { registration: this.registrations.get(opened.registration), audience: opened.audience, version: opened.version ?? 0, root: opened.root, issuedAt: new Date(opened.iat * 1000).toISOString() };
   }
 
@@ -943,7 +1089,7 @@ export class Registry {
       subjectPpid = fwd.subject_ppid;
       forwardedBy = peer.id;
     }
-    if (!ord.ppids.includes(subjectPpid)) throw new HttpError(403, 'not_covered', 'the order does not cover this PPID');
+    if (!ord.ppids.includes(subjectPpid)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
 
     const located = this.locate(ppid, sealedRef);
     const { registration } = located;
@@ -1008,6 +1154,38 @@ export class Registry {
       chain, related_ppids: related,
     };
     return { result, token: signJws({ iss: this.id, iat: nowSeconds(), ...result }, this.keys.signing, { typ: TYP.resolution }) };
+  }
+
+  /**
+   * Revocation under a legal order (RV-1): a recognized authority may require
+   * this directory to revoke the registration behind an ID. The order must name
+   * the ID and carry the revoke_registration scope. An ID from before a change
+   * of hands names a relationship that has already ended, so there is nothing
+   * to revoke under it.
+   */
+  async revokeUnderOrder({ order, ppid, sealed_ref: sealedRef }) {
+    const { payload: ord, authority } = this.verifyOrder(order);
+    if (!ord.ppids?.includes(ppid)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
+    if (!ord.scope?.includes(ORDER_SCOPE_REVOKE)) throw new HttpError(403, 'not_in_scope', `the order does not include the ${ORDER_SCOPE_REVOKE} scope`);
+    const located = this.locate(ppid, sealedRef);
+    const { registration } = located;
+    if (located.version !== this.chainVersion(registration)) {
+      throw new HttpError(409, 'custody_changed', 'this ID belongs to a principal–agent relationship that has already ended; the agent now answers to a different principal');
+    }
+    let res = { registration_id: registration.id, status: 'revoked', already: true };
+    if (registration.status !== 'revoked') {
+      this.commit('registration.revoked', { id: registration.id, reason: 'legal_order', by: `authority:${authority.id}`, case: ord.case });
+      const descendants = this.descendants(registration);
+      const peersNotified = await this.pushStatusChange([registration, ...descendants]);
+      res = { registration_id: registration.id, status: 'revoked', reason: 'legal_order', cascades_to: descendants.length, peers_notified: peersNotified };
+    }
+    if (!res.already && ord.notify_principal !== false && registration.root_principal) {
+      this.commit('notification.sent', {
+        principal: registration.root_principal,
+        notification: { kind: 'revocation_order', authority: authority.id, case: ord.case, registration_id: registration.id, agent_label: registration.label },
+      });
+    }
+    return { ...res, ppid, authority: authority.id, case: ord.case };
   }
 
   // -------------------------------------------------------------------------

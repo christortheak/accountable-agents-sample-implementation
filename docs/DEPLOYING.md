@@ -9,9 +9,9 @@ One server runs four public services behind HTTPS, each on its own subdomain:
 | Service | Example address | What it does |
 |---|---|---|
 | Trust anchor | `https://federation.example.org` | the federation's governance body: lists members and vouches for their keys (OpenID Federation) |
-| Registry | `https://registry.example.org` | verifies principals, registers agents, issues PPIDs and credentials, publishes status, resolves under orders |
+| Registry | `https://registry.example.org` | verifies principals, registers agents, issues IDs, publishes status and its practices, resolves and revokes under orders (the paper's "directory") |
 | Record keeper | `https://records.example.org` | authorization records and token exchange, provenance, activity logs |
-| Sandbox shop | `https://shop.example.org` | a relying party where agents transact; its home page shows every decision and what it learned |
+| Sandbox shop | `https://shop.example.org` | a relying party (the paper's "counterparty") where agents transact; its home page shows every decision and what it learned |
 
 As the operator you also play two roles that can't be automated in a pilot:
 - **Identity verifier:** you confirm who each participant is, for example from personal knowledge, and record it with one command. The federation calls this "verified by the pilot team"; it is not a KYC check.
@@ -44,7 +44,7 @@ It uses the same image, Compose file and Caddyfile as a real pilot. The pilot's 
 - registering an agent and granting it authority;
 - purchases the shop allows, asks for more on, and denies;
 - `/admin` blocked;
-- resolving a PPID;
+- resolving an ID;
 - a restart that keeps every key and record.
 
 It takes a few minutes and removes everything afterwards (`--keep` leaves it running). It runs as its own Compose project on 127.0.0.1:8443, so it can't touch a real pilot on the same server. The one thing it can't check is that Let's Encrypt issues certificates for your domains; that happens on the first real start.
@@ -56,7 +56,7 @@ On a Mac, Docker can come from [Colima](https://github.com/abiosoft/colima): `br
 On the server:
 
 ```bash
-git clone https://github.com/christortheak/accountable-agents-framework.git aaf && cd aaf
+git clone https://github.com/christortheak/accountable-agents-sample-implementation.git aaf && cd aaf
 ```
 
 ```bash
@@ -77,6 +77,17 @@ In all three copies, replace `example.org` with your domain. The names must matc
 - `config/rp.pilot.json` gives the shop's `id`, its `publicUrl`, and the trust anchor's address.
 
 You can also change the names of the services, the federation's policies, and the shop's rules: which actions it offers and what each requires. Policy tiers are explained in the specification, §10.3.
+
+A shop learns only an agent's ID unless it asks for more. To set acceptance criteria, add them to a tier's `require`. The agent is asked to show those claims, and nothing else:
+
+```json
+{ "label": "organizations only", "require": { "accountability": "established", "authorization": true,
+    "principalType": "legal_person", "assurance": ["high"], "maxChainLength": 2 } }
+```
+
+To accept IDs from only some registries, list them in the shop's config: `"acceptedRegistries": ["https://registry.example.org"]`.
+
+The registry publishes its practices, which include how it verifies people, how long IDs last, who may revoke and how identities are released. They are at `https://registry.example.org/v1/practices`. Read them once the pilot is up: they are what you are telling participants and shops.
 
 ## 2. Start it
 
@@ -130,15 +141,27 @@ docker compose -f deploy/docker-compose.yml exec -T federation node src/cli/aaf.
 
 From then on, the participant can register agents.
 
-## 5. Demonstrate resolution (optional)
-
-To show how a court order identifies the principal behind an agent, take a PPID from the shop's page:
+The registry keeps one principal record per verified person or organization, so the same person can't be verified twice. If a participant loses their `~/.aaf` folder, close their old record first, then verify their new enrollment. Their old agents stop working; their history is kept.
 
 ```bash
-docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator resolve <ppid> --case "pilot demonstration" --rp https://shop.example.org
+docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator close-principal <principal-id>
+```
+
+## 5. Demonstrate legal orders (optional)
+
+To show how a court order identifies the principal behind an agent, take an ID from the shop's page:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator resolve <id> --case "pilot demonstration" --rp https://shop.example.org
 ```
 
 The participant is notified that their agent was resolved, unless you add `--no-notify`. Each resolution is also logged in the registry's transparency log.
+
+An order can also have the registry revoke the agent behind an ID, with everything below it:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator revoke <id> --case "pilot demonstration"
+```
 
 ## Running it
 

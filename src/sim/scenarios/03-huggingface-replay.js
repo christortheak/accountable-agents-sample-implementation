@@ -1,4 +1,4 @@
-// Scenario 3 (paper §4, Scenario 3): the Hugging Face incident, replayed.
+// Scenario 3: the Hugging Face incident, replayed.
 import { getJson, postJson } from '../../lib/http.js';
 import { verifySelfSignedJws } from '../../lib/crypto.js';
 import { short } from '../world.js';
@@ -144,7 +144,8 @@ export default {
     const misuse = [];
     const hub2 = await world.relyingParty({
       id: 'modelhub.example', name: 'ModelHub (with passkeys)',
-      requests: { provenance: true },
+      // What the account holder is shown before approving an agent: the kind of principal, how it was verified, the chain.
+      requests: { provenance: true, principal_type: true, assurance: true, verification_source: true, chain_length: true },
       accounts: { rpId: 'modelhub.example', origin: 'https://modelhub.example' },
       rules: {
         'content.read': [{ label: 'public content', require: { accountability: 'none', liveStatus: false } }],
@@ -255,5 +256,12 @@ export default {
     n.act('Court', `resolves the PPID → ${res2.result.root_principal.identity.legal_name} (verified ${res2.result.root_principal.verification.assurance_level}, process ${res2.result.root_principal.verification.verification_process})`);
     n.note('Once untethered agents are blocked, tether fraud is the remaining attack. But the sham sponsor is verified and on record, which creates a liability hook: TetherCo must answer for the agent or identify its customer.');
     n.expect(res2.result.root_principal.identity.legal_name === 'TetherCo LLC', 'the sham sponsor is identified and answerable');
+    // If the sponsor will not stop the agent, the authority can: an order with the revoke scope has the directory revoke it.
+    const order3 = world.court.order({ caseId: 'ModelHub, Inc. v. Doe 4', ppids: [hit.ppid], requester: 'ModelHub, Inc.', scope: ['revoke_registration'] });
+    const stopped = await world.court.revoke(regA, { order: order3, ppid: hit.ppid });
+    n.act('Court', `orders ${regA.name} to revoke the agent → ${stopped.status} (${stopped.reason}); every ID it holds stops verifying`);
+    const blocked = await rented.act(modelhub.url, 'dataset.read_private', { repo: 'victim-org/held-out-evals', account_token: STOLEN_TOKEN });
+    n.decision('ModelHub ← client-7731 (after the order)', blocked);
+    n.expect(stopped.status === 'revoked' && blocked.decision === 'deny' && blocked.classification === 'REVOKED', 'a rogue agent whose sponsor will not act is stopped by the directory under a legal order');
   },
 };

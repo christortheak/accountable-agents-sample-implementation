@@ -2,20 +2,20 @@
   "header": {
     "alg": "EdDSA",
     "typ": "entity-statement+jwt",
-    "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek"
+    "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg"
   },
   "payload": {
     "iss": "https://records-1.aaf.test",
     "sub": "https://records-1.aaf.test",
-    "iat": 1792270758,
-    "exp": 1792357158,
+    "iat": 1795303625,
+    "exp": 1795390025,
     "jwks": {
       "keys": [
         {
           "crv": "Ed25519",
-          "x": "vosw9DsrRL3uownimJovvfqVj_JhnatrZxmGygN9fts",
+          "x": "Glk711VAtk9D0KFV8gb96HNYUuJFEXw8kH0twUiZHfo",
           "kty": "OKP",
-          "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek",
+          "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg",
           "use": "sig"
         }
       ]
@@ -32,9 +32,9 @@
           "keys": [
             {
               "crv": "Ed25519",
-              "x": "vosw9DsrRL3uownimJovvfqVj_JhnatrZxmGygN9fts",
+              "x": "Glk711VAtk9D0KFV8gb96HNYUuJFEXw8kH0twUiZHfo",
               "kty": "OKP",
-              "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek",
+              "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg",
               "use": "sig"
             }
           ]

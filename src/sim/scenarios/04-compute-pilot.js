@@ -1,4 +1,4 @@
-// Scenario 4: the paper's open challenge (§5.6). An agent requests paid
+// Scenario 4: the pilot the paper's conclusion (Section 4) calls for. An agent requests paid
 // computing resources. The pilot covers disclosed organizational principals,
 // privacy-protected human principals, unsupported accountability claims, and
 // revoked or compromised credentials.
@@ -11,7 +11,7 @@ const gpu = (units, region = 'us-east') => ({ units, unit: 'gpu-hour', region, i
 
 export default {
   id: 'compute',
-  title: 'Scenario 4 — Paid compute pilot (the open challenge in §5.6)',
+  title: 'Scenario 4 — Paid compute pilot (the pilot the paper calls for)',
   framing:
     'Ampere Cloud rents GPUs to agents. Small jobs need an accountable principal and authority. Large jobs also need a disclosed principal and the agent\'s bill of materials. ' +
     'Success means a timely, justified decision that preserves privacy and leaves usable evidence, not merely returning an identifier.',
@@ -38,7 +38,7 @@ export default {
     const record = (label, res, ev) =>
       summary.push([
         label, res.decision, res.classification, res.latencyMs != null ? `${res.latencyMs}ms` : '—',
-        ev?.root ? (ev.root.identity?.legal_name ?? `${ev.root.type.replace('_', ' ')}, identity protected`) : 'nothing verifiable',
+        ev?.root ? (ev.root.identity?.legal_name ?? 'a verified principal, identity protected') : 'nothing verifiable',
         evidenceKept(ev),
       ]);
 
@@ -62,7 +62,7 @@ export default {
     record('disclosed org, 64 GPU-h', big, ampere.evidence.at(-1));
     n.expect(big.decision === 'allow' && big.classification === 'ACCOUNTABLE_DISCLOSED', 'large job granted to a disclosed, accountable organization with a published bill of materials');
 
-    n.step('Case 2: a privacy-protected human principal using ephemeral PPIDs');
+    n.step('Case 2: a privacy-protected human principal using single-use IDs');
     const sam = await world.verifiedPrincipal({
       type: 'natural_person', identity: { legal_name: 'Samuel Okafor', jurisdiction: 'US-CA', date_of_birth: '1994-02-03' },
       assurance: 'IAL2', method: 'government ID + liveness check',
@@ -96,9 +96,9 @@ export default {
     const forged = issueSdJwt(
       {
         vct: `${world.trust.trustAnchor.entity_id}/vct/accountability/1`,
-        iss: 'https://registry-x.example', sub: 'ppid:registry-x.example:p_00000000000000000000000000', aud: ampere.id, iat: now, exp: now + 300,
-        cnf: { jwk: publicOf(forgerKey.publicJwk) }, ppid_mode: 'pairwise',
-        accountability: { status: 'accountable', root_principal: { type: 'legal_person', verified: true, verification: { trust_framework: 'aaf_kyb', assurance_level: 'high', verifier: 'https://trust-us.example' }, identity: 'protected' }, chain_length: 1, attributes: [] },
+        iss: 'https://registry-x.example', sub: 'aaf:registry-x.example:p_00000000000000000000000000', aud: ampere.id, iat: now, exp: now + 300,
+        cnf: { jwk: publicOf(forgerKey.publicJwk) }, id_mode: 'pairwise',
+        accountability: { status: 'accountable', principal_type: 'legal_person', assurance: { trust_framework: 'aaf_kyb', assurance_level: 'high' }, verification_source: { verifier: 'https://trust-us.example' }, chain_length: 1, attributes: [] },
         records: [],
       },
       rogueRegistryKey,
@@ -141,7 +141,7 @@ export default {
     record('revoked, cached credentials', cached, ampere.evidence.at(-1));
     n.expect(fresh instanceof ServiceError && cached.decision === 'deny' && cached.classification === 'REVOKED', 'revoked credentials fail both ways: no new attestations, and cached ones fail the live status check');
 
-    n.step('Ephemeral PPIDs still resolve, but only with the sealed reference');
+    n.step('Single-use IDs still resolve, but only with the sealed reference');
     const order = world.court.order({ caseId: 'Ampere Cloud v. Doe (unpaid invoice)', ppids: [s1.ppid], relyingParty: ampere.id, requester: 'Ampere Cloud' });
     let without;
     try {

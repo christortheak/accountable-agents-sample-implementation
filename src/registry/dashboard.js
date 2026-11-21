@@ -12,7 +12,7 @@ export function registryDashboard(registry) {
       ['verified principals', s.verified_principals],
       ['active registrations', s.active_registrations],
       ['revoked registrations', s.revoked_registrations],
-      ['pairwise PPIDs issued', s.pairwise_ppids],
+      ['PPIDs issued (reusable IDs)', s.pairwise_ppids],
       ['incidents relayed', s.incidents],
       ['log entries', s.log_size],
     ]),

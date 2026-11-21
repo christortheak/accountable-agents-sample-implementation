@@ -1,5 +1,5 @@
-// Scenario 5: federation and delegation chains (paper §3.1 "Registries", Figure 0's
-// authorizing agent and acting agent). A parent agent registered in the US
+// Scenario 5: several directories and delegation chains (the paper's "Interoperable"
+// advantage, and delegating agents, AG-3). A parent agent registered in the US
 // registers a sub-agent with an EU registry and delegates part of its authority.
 import { ServiceError, postJson } from '../../lib/http.js';
 import { describePermission } from '../../lib/scope.js';
@@ -57,7 +57,8 @@ export default {
     n.step('RailBooker books a train at an EU relying party');
     const railEuropa = await world.relyingParty({
       id: 'raileuropa.example', name: 'Rail Europa',
-      rules: { 'commerce.purchase': [{ label: 'ticketing', require: { accountability: 'established', authorization: true } }] },
+      // Rail Europa accepts agents up to three links from their principal, so it asks for the chain length.
+      rules: { 'commerce.purchase': [{ label: 'ticketing', require: { accountability: 'established', authorization: true, maxChainLength: 3 } }] },
       handlers: { 'commerce.purchase': async (p) => ({ ticket: `RE-${Math.floor(Math.random() * 1e6)}`, item: p.item }) },
     });
     const book = await railbooker.act(railEuropa.url, 'commerce.purchase', { item: 'Paris → Lyon, 2nd class', amount: money(129, 'EUR'), category: 'rail' });

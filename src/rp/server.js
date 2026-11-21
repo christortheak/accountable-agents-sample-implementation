@@ -17,16 +17,18 @@ import { TYP as RK_TYP } from '../recordkeeper/recordkeeper.js';
  * @param {string} opts.id         relying party identifier (the audience agents address)
  * @param {object} opts.rules      policy tiers per action (see policy.js)
  * @param {object} opts.handlers   action -> async (params, verification, rp) => result
- * @param {object} opts.requests   what the RP asks agents to disclose: { identity, attributes, provenance }
+ * @param {object} opts.requests   what the RP asks agents to disclose on every action: { identity, attributes, provenance,
+ *                                 principal_type, assurance, verification_source, chain_length }; claims a tier requires are asked for automatically
+ * @param {string[]} opts.acceptedRegistries  directories whose IDs this RP accepts (default: all in the federation)
  * @param {Function} opts.onDecision  hook called after every decision (anomaly detection, SAR flags...)
  * @param {object} opts.accounts   { rpId, origin } to enable passkey accounts (accounts.js)
  * @param {Function} opts.onAccountMisuse  hook when an agent presents an account's token without the holder's authorization
  * @param {Function} opts.routes   (app, rp) => void, to add routes (used by the browser demo)
  * @param {string} opts.publicUrl  the URL agents use to reach this relying party, if it runs behind a proxy
  */
-export async function startRelyingParty({ id, name, port = 0, host = '127.0.0.1', trust, rules, handlers = {}, requests = {}, onDecision, accounts: accountsConfig, onAccountMisuse, routes, publicUrl, key: givenKey }) {
+export async function startRelyingParty({ id, name, port = 0, host = '127.0.0.1', trust, rules, handlers = {}, requests = {}, acceptedRegistries = null, onDecision, accounts: accountsConfig, onAccountMisuse, routes, publicUrl, key: givenKey }) {
   const key = givenKey ?? generateSigningKey();
-  const verifier = createVerifier({ rpId: id, trust });
+  const verifier = createVerifier({ rpId: id, trust, acceptedRegistries });
   const app = createApp(id);
   const accounts = accountsConfig ? createAccounts({ ...accountsConfig, name }) : null;
   const rp = { id, name, key, evidence: [], received: [], trust, accounts };
@@ -35,7 +37,7 @@ export async function startRelyingParty({ id, name, port = 0, host = '127.0.0.1'
     id,
     name,
     jwks: { keys: [{ ...publicOf(key.publicJwk), use: 'sig' }] },
-    accepted_registries: trust.registries.map((r) => r.id),
+    accepted_registries: acceptedRegistries ?? trust.registries.map((r) => r.id),
     requests,
     actions: Object.fromEntries(Object.entries(rules).map(([a, tiers]) => [a, tiers.map((t) => ({ label: t.label, require: { ...t.require } }))])),
     ...(accounts ? { webauthn: { rpId: accounts.rpId, origin: accounts.origin } } : {}),
@@ -65,8 +67,9 @@ export async function startRelyingParty({ id, name, port = 0, host = '127.0.0.1'
     // resolved, the profile it relied on, signed status tokens and the outcome.
     const evidence = {
       txn, at: new Date().toISOString(), action, params, decision: d.decision, reasons: d.reasons, tier: d.tier,
-      classification, ppid: v.ppid, ppid_mode: v.mode, registry: v.registry?.id ?? null, sealed_ref: v.sealedRef,
-      root: v.root ? { type: v.root.type, trust_framework: v.root.verification?.trust_framework, assurance: v.root.verification?.assurance_level, verifier: v.root.verification?.verifier, identity: v.identity } : null,
+      classification, ppid: v.ppid, id_mode: v.mode, registry: v.registry?.id ?? null, sealed_ref: v.sealedRef,
+      // Only what the agent disclosed: any of these may be null.
+      root: v.root ? { type: v.root.type, trust_framework: v.root.trust_framework, assurance: v.root.assurance_level, verifier: v.root.verifier, directory: v.root.directory, identity: v.identity } : null,
       chain_length: v.chainLength, attributes: v.attributes.map((a) => ({ name: a.name, value: a.value })),
       authority_relied_on: v.authorization?.valid ? v.authorization.permissions : null,
       approval: v.approval, status_tokens: [...v.tokens, v.authorization?.statusToken].filter(Boolean),
@@ -84,7 +87,7 @@ export async function startRelyingParty({ id, name, port = 0, host = '127.0.0.1'
     return {
       __raw: true,
       status: d.decision === 'allow' ? 200 : 403,
-      body: { txn, decision: d.decision, reasons: d.reasons, tier: d.tier, classification, result, ...(gate?.approvalRequest ? { approval_request: gate.approvalRequest } : {}) },
+      body: { txn, decision: d.decision, reasons: d.reasons, tier: d.tier, classification, result, ...(d.missing_claims ? { missing_claims: d.missing_claims } : {}), ...(gate?.approvalRequest ? { approval_request: gate.approvalRequest } : {}) },
     };
   });
 
@@ -179,7 +182,7 @@ function accountGate({ accounts, tier, action, params, v, headers }) {
       // The holder authorizes the agent for this kind of resource; actions marked
       // humanApproval still need the holder's passkey every time.
       scope: [toRar({ action: `${parseAction(action).type}.*` })],
-      accountability: { type: root.type, assurance: root.verification?.assurance_level, verifier: root.verification?.verifier, chain_length: v.chainLength, identity: v.identity },
+      accountability: { type: root.type, assurance: root.assurance_level, verifier: root.verifier, chain_length: v.chainLength, identity: v.identity },
       valid_for_seconds: 86400,
     });
     return { decision: 'step_up', account: account.id, approvalRequest, reasons: ['the account holder must first authorize this agent with their passkey (request sent)'] };

@@ -63,6 +63,8 @@ export async function startDemo({ port = DEMO_PORT, quiet = false, federation: g
   const rp = await world.relyingParty({
     id: 'modelhub.localhost', name: 'ModelHub (passkey demo)', port,
     accounts: { rpId: 'localhost', origin },
+    // Shown to the account holder before they approve an agent.
+    requests: { principal_type: true, assurance: true, verification_source: true, chain_length: true },
     rules: {
       'dataset.read_private': [{ label: 'private data: the account holder, or an agent they authorized', require: { accountability: 'agent_or_human', account: 'owner' } }],
       'dataset.delete': [{ label: 'destructive: passkey approval every time', require: { accountability: 'established', authorization: true, account: 'owner', humanApproval: true } }],

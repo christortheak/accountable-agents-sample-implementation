@@ -3,8 +3,8 @@
     "content-type": "application/json",
     "content-digest": "sha-256=:<base64 of SHA-256(body)>:",
     "aaf-presentation": "<base64url JSON below>",
-    "signature-input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\" \"content-type\" \"aaf-presentation\");created=1792270758;nonce=\"n_t40nnj66wt0bvrrqzwtg\";alg=\"ed25519\";keyid=\"cnf:ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw\";tag=\"aaf-agent\"",
-    "signature": "sig1=:VpQGdXbwFjp6PLzIiNYUo6T2…"
+    "signature-input": "sig1=(\"@method\" \"@target-uri\" \"content-digest\" \"content-type\" \"aaf-presentation\");created=1795303625;nonce=\"n_v5bw3jzbn34nb0hn1ha0\";alg=\"ed25519\";keyid=\"cnf:D7--HJBSQ_WbgsIigkZZks_YfjGDk5eYGjA4-2wf8Ck\";tag=\"aaf-agent\"",
+    "signature": "sig1=:cJWtCHTmJOtaetsavAmxtMA5…"
   },
   "presentation": {
     "v": 2,
@@ -13,67 +13,74 @@
         "header": {
           "alg": "EdDSA",
           "typ": "dc+sd-jwt",
-          "kid": "yVTiMu7OQFOYAmwuyECy-Lo34zr_SAzdn7D4lK5_ZDo"
+          "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w"
         },
         "payload": {
           "vct": "https://federation.aaf.test/vct/accountability/1",
           "iss": "https://registry-a.aaf.test",
-          "sub": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94",
+          "sub": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm",
           "aud": "shop.example",
-          "iat": 1792270758,
-          "exp": 1792271058,
-          "jti": "att_cvp8af9847nkxv7fratg",
+          "iat": 1795303625,
+          "exp": 1795303925,
+          "jti": "att_1cqtfkpemdeyt9h666k0",
           "cnf": {
             "jwk": {
               "crv": "Ed25519",
-              "x": "PkbcsVXcRMnrsZ2VW78Q8UehZdeuMa0wmPV6wr4MAtc",
+              "x": "MHCOrNks2mw-KUEMNaUw8Cn17gufK7e5eBpkIPXqU-A",
               "kty": "OKP",
-              "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+              "kid": "D7--HJBSQ_WbgsIigkZZks_YfjGDk5eYGjA4-2wf8Ck"
             }
           },
-          "ppid_mode": "pairwise",
-          "reg_binding": "pOUDMPnDPpV9EET3SvxCjtbCadW-epXXpTIhQfEkcJA",
+          "id_mode": "pairwise",
+          "reg_binding": "94KHWutZpANpBcYxIQwlsG80582DzW9KGsnCN5dgEhs",
           "accountability": {
             "status": "accountable",
-            "root_principal": {
-              "type": "legal_person",
-              "verified": true,
-              "verification": {
-                "trust_framework": "aaf_kyb",
-                "assurance_level": "high",
-                "time": "2026-10",
-                "verifier": "https://kyc.verifier.test"
-              },
-              "registry": "https://registry-a.aaf.test",
-              "identity": "disclosable",
-              "disclosed_identity": {
-                "_sd": [
-                  "7myT9mGU6LZXvtByO-hWjwoWEI5sNeLKmH3i6LVwiGQ",
-                  "F8hgTun878DEj4kqvt4sgIYGgX9nSdUrOz6sfULbdGo"
-                ]
-              }
-            },
-            "chain_length": 1,
             "attributes": [
               {
-                "...": "7L0mbvsVtxp2tEq5S5gGPi88KsM4u8kXVGmLV-hc-IY"
+                "...": "kW-h_0Rz6GWHEXVK7k77enPZXctlty1iy_CVjIyPH0U"
+              },
+              {
+                "...": "0pKJy0FO54T7dxG8IAjvJoHQ3d85nvwcufy3N-2VQzE"
+              },
+              {
+                "...": "ahiWTb9RRPZ31c4GrLGA_zk4vRlnLBF0ngD7uNoM498"
+              },
+              {
+                "...": "CEeuj0GFUIRllFVDzGlNZXPjxQrZNb64RHlCthrG1Cw"
               }
+            ],
+            "_sd": [
+              "1SRaliE4MtjIYpFEGnlGw7raDJqtuhQge5f9tghUztc",
+              "4MCWIK-3n9j4DrIOfVVFgtcTALZ_A8NhjV8BDTtIA3s",
+              "Cuh_MP_6C1MPlSbYusJcgXc-fDXD9STKS9FrCvpfE7M",
+              "EjP9ZNt6YmxzkKeaeF4xZaJfXu9BRKL7-k2ITT9Dpsc",
+              "FTsnY3ZW62yqaoWbEc0JHgwCl3keL54yo9xckAwu7es",
+              "TyVTrBUhIihio7ZEGL2RHpi0_5x5pScwXE6tqm0bay0",
+              "WGXcps3jmZ20tm1ve0ki00vVk4Dm8NcwyKghbteKElY",
+              "cLsxaiJoFiUrx9IMXMBrTtGeN5SHYx1Mqil6xb45Oq8",
+              "ivInQcUa1g292grxDrqyQ3J8YAf-hWivM_T17BorPac",
+              "jQS7BQ2C2Pi35WONNEJpzDxii98F2RJct8ge_1_Co8Q",
+              "rycpv81pRvgirNRdpkVR9_fF1cTEvlDhy-qQgGbTWvc",
+              "uhDRktL_-wuSDw2tInWVy7g0we7vV2VHDeh_lJ-14Fc"
             ]
           },
           "records": [
             {
-              "...": "Jp8pxq5bQAq-V3NwHOmewpB-QC2jVQCkt3jCHqiLzsc"
+              "...": "pzFlxrxEGA_Y5egm_Pey-uy-d_jMITQx2NVbAjcHI0s"
             },
             {
-              "...": "gykwRNrByEgqpysMkvTaASzJpg_NbA-CFql5Gd0Awss"
+              "...": "ngWDVQjVCOWSXhtRrF2-n15__vxr68EwF568vOGz0FM"
             },
             {
-              "...": "uxrrvTJgii6vEVqOeibZkezQJ8CQz1MCrg_oEzMer-U"
+              "...": "vi9iQm6Ah487AChyW38anddtdqHZlcgSFxnXa6KxZ_s"
+            },
+            {
+              "...": "jHFR_XhEzaXQ7bkHmIs4GRXltJhk7YwhM1RbvraBz9M"
             }
           ],
           "status": {
             "status_list": {
-              "idx": 55347,
+              "idx": 23149,
               "uri": "https://registry-a.aaf.test/status-lists/1"
             }
           },
@@ -82,35 +89,44 @@
       },
       "disclosures": [
         {
-          "encoded": "WyJFaUpKcThEVVhTcVFRYjdR…",
+          "encoded": "WyJNWXc5ZzVaNzFUa3dsYVNx…",
           "decoded": [
-            "EiJJq8DUXSqQQb7QsC2hlw",
+            "MYw9g5Z71TkwlaSqmjWfCg",
+            "principal_type",
+            "legal_person"
+          ]
+        },
+        {
+          "encoded": "WyJCbmVTVkxhTTg2RkJnUXJu…",
+          "decoded": [
+            "BneSVLaM86FBgQrnO9a8Sw",
+            "assurance",
+            {
+              "trust_framework": "aaf_kyb",
+              "assurance_level": "high"
+            }
+          ]
+        },
+        {
+          "encoded": "WyJBOFdwaW8xUFBDOGpjQmRr…",
+          "decoded": [
+            "A8Wpio1PPC8jcBdkHZsZ1g",
             "legal_name",
             "Example Corp"
           ]
         },
         {
-          "encoded": "WyI3WGVfcmVyUk91dnFZSV9u…",
+          "encoded": "WyJfWUI2VUx0OXpUX0tnekY4…",
           "decoded": [
-            "7Xe_rerROuvqYI_nKjhtuw",
+            "_YB6ULt9zT_KgzF8dI-rlw",
             "registration_number",
             "DE-1234567"
           ]
         },
         {
-          "encoded": "WyJtZlk3UHc3WWtsVjdEQnZS…",
+          "encoded": "WyJ5bllRRlhHZUlHVG5aNXJ0…",
           "decoded": [
-            "mfY7Pw7YklV7DBvR6Obhow",
-            {
-              "role": "authorization",
-              "rk": "https://records-1.aaf.test"
-            }
-          ]
-        },
-        {
-          "encoded": "WyJ0MjJTa0MzYm1lOWRDU0ZE…",
-          "decoded": [
-            "t22SkC3bme9dCSFD0eGo9Q",
+            "ynYQFXGeIGTnZ5rtGtIp3A",
             {
               "role": "activity",
               "rk": "https://records-2.aaf.test"
@@ -122,13 +138,13 @@
         "header": {
           "alg": "EdDSA",
           "typ": "kb+jwt",
-          "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+          "kid": "D7--HJBSQ_WbgsIigkZZks_YfjGDk5eYGjA4-2wf8Ck"
         },
         "payload": {
-          "iat": 1792270758,
+          "iat": 1795303625,
           "aud": "shop.example",
-          "nonce": "n_t40nnj66wt0bvrrqzwtg",
-          "sd_hash": "fI_JdPYsdfMbsk-Fw423MjwHMrMtxuiBkCZaFXWhYhs"
+          "nonce": "n_v5bw3jzbn34nb0hn1ha0",
+          "sd_hash": "sfIZ3zoN4IN_Yv1hPJ1OCsKkigOzyF9UUjhPjjrjPHw"
         }
       }
     },
@@ -137,33 +153,33 @@
         "header": {
           "alg": "EdDSA",
           "typ": "dc+sd-jwt",
-          "kid": "4ahiTAghWUNtDxtMU7JlygqbBRxoubPpAg8j4jag_Ek"
+          "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg"
         },
         "payload": {
           "vct": "https://federation.aaf.test/vct/authorization/1",
           "iss": "https://records-1.aaf.test",
-          "sub": "urn:aaf:pseudonym:9y3h3q5ndq77fs50ha3g",
+          "sub": "urn:aaf:pseudonym:rn2atk2f2x6x9wrg4mdg",
           "act": {
-            "sub": "ppid:registry-a.aaf.test:p_j2etytm14f9v6pfnp9vqtmqc94"
+            "sub": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm"
           },
           "aud": "shop.example",
-          "iat": 1792270758,
-          "exp": 1792271058,
-          "jti": "az_73kfe4y1aav8wdfb7qjg",
+          "iat": 1795303625,
+          "exp": 1795303925,
+          "jti": "az_fmfnesmmdrdgrwrr5eh0",
           "cnf": {
             "jwk": {
               "crv": "Ed25519",
-              "x": "PkbcsVXcRMnrsZ2VW78Q8UehZdeuMa0wmPV6wr4MAtc",
+              "x": "MHCOrNks2mw-KUEMNaUw8Cn17gufK7e5eBpkIPXqU-A",
               "kty": "OKP",
-              "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+              "kid": "D7--HJBSQ_WbgsIigkZZks_YfjGDk5eYGjA4-2wf8Ck"
             }
           },
           "authorization_details": [
             {
-              "...": "_wOSdUGpQzlgZ9A6W_yEsF28GgoA6uvh9iTrllSKbks"
+              "...": "EO-VQBSG0AStoOD4e4vNVVowHotmMgLRjbZY_iIPPZs"
             },
             {
-              "...": "_ONCo07n7mFqM4_eX2mRza0mioIRWTSqARmLZXCKTAA"
+              "...": "DC9nqsVvWLfrlQvm7sXWrX2mPc5C81icW_6KCLEOreo"
             }
           ],
           "prohibitions": [
@@ -178,26 +194,26 @@
             "allowed": false,
             "max_depth": 0
           },
-          "granted_on": "2026-10-17",
-          "valid_until": "2026-11-16",
-          "grant_commitment": "gGa0kLytDZgrf1m5nlyjP8jH2IlZyB1AJ7aZ6izhG4Q",
+          "granted_on": "2026-11-21",
+          "valid_until": "2026-12-21",
+          "grant_commitment": "lZbg2ktu6ces9KJzeXzaJ3qwCAZA8AxP30bkhYL1Cxo",
           "status": {
             "status_list": {
-              "idx": 59516,
+              "idx": 43269,
               "uri": "https://records-1.aaf.test/status-lists/1"
             }
           },
           "_sd": [
-            "rK7ZkKXxySOfRDb9oQtk1VEm19141W2nYR6_1L6C6aE"
+            "Z7KimL4TfWDWVcb-785i1eqkBBYy4BLQV_puUp97UDM"
           ],
           "_sd_alg": "sha-256"
         }
       },
       "disclosures": [
         {
-          "encoded": "WyIzaWFVQ0l5OVg2aTMteHc0…",
+          "encoded": "WyJRWldqRDFINnVaWkcyODFo…",
           "decoded": [
-            "3iaUCIy9X6i3-xw42X2KVQ",
+            "QZWjD1H6uZZG281h106-lw",
             {
               "type": "commerce",
               "actions": [
@@ -218,13 +234,13 @@
         "header": {
           "alg": "EdDSA",
           "typ": "kb+jwt",
-          "kid": "ozFhkA-yOXu-A9f_tkN3CYdkeQOe9-vJarwKIPzXtlw"
+          "kid": "D7--HJBSQ_WbgsIigkZZks_YfjGDk5eYGjA4-2wf8Ck"
         },
         "payload": {
-          "iat": 1792270758,
+          "iat": 1795303625,
           "aud": "shop.example",
-          "nonce": "n_t40nnj66wt0bvrrqzwtg",
-          "sd_hash": "2M8Iy4aO5JazS6-aYIGd6CLpZmH33GX47bQ32MZJbRI"
+          "nonce": "n_v5bw3jzbn34nb0hn1ha0",
+          "sd_hash": "QfKMTuAMkcnkwNyN417M3aX4nHWfjfk63yVKM2G5GyA"
         }
       }
     }

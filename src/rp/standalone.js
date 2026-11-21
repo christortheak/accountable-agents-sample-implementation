@@ -66,6 +66,7 @@ export async function startStandaloneRp(config, { quiet = false } = {}) {
     key: persistentKey(config.id),
     trust,
     requests: config.requests ?? {},
+    acceptedRegistries: config.acceptedRegistries ?? null,
     rules: rulesFrom(config),
     handlers: Object.fromEntries(Object.keys(config.rules).map((action) => [action, async () => ({ reference: randomId('ref', 8), note: 'simulated: nothing real was bought or provided' })])),
     routes: (app, self) => {

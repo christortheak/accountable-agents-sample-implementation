@@ -7,7 +7,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { keyFromJwk, decodeJws } from '../lib/crypto.js';
-import { discoverFederation, fetchTrustAnchor, loadTrustAnchor, loadKeys, DATA_DIR } from '../lib/trust.js';
+import { discoverFederation, fetchTrustAnchor, loadTrustAnchor, loadKeys, loadFederationConfig, DATA_DIR } from '../lib/trust.js';
+import { postJson } from '../lib/http.js';
+import { registryOfPpid, ORDER_SCOPE_REVOKE } from '../registry/registry.js';
 import { describePermission } from '../lib/scope.js';
 import { decodeDisclosure, splitSdJwt } from '../lib/sd-jwt.js';
 import { Principal } from '../actors/principal.js';
@@ -118,6 +120,20 @@ function constraintsFrom(flags) {
 function delegationFrom(flags) {
   const depth = flags.delegable === undefined ? 0 : Number(flags.delegable === true ? 1 : flags.delegable);
   return { allowed: depth > 0, max_depth: depth };
+}
+
+/** The registry that issued an ID (its host is part of the ID). */
+function issuerOf(trust, id) {
+  const host = registryOfPpid(id) ?? fail('that is not an ID in the form aaf:<directory>:…');
+  return trust.registries.find((r) => new URL(r.id).host === host) ?? fail('no registry in this federation issued that ID');
+}
+
+/** Operator endpoints are served only on the server itself, at the service's local port. */
+function adminUrlOf(serviceId, flags) {
+  if (flags['admin-url']) return String(flags['admin-url']).replace(/\/$/, '');
+  const config = loadFederationConfig();
+  const svc = config.services.find((s) => s.id === serviceId) ?? fail(`${serviceId} is not in this server's federation config`);
+  return `http://${config.host}:${svc.port}`;
 }
 
 function operatorKeysDir(flags) {
@@ -259,7 +275,7 @@ const commands = {
 
   async act({ positional, flags }) {
     const [name, rpUrl, action] = positional;
-    if (!name || !rpUrl || !action) fail('usage: aaf act <agent> <relying-party-url> <action> [--params \'{"…"}\'] [--ephemeral] [--disclose identity,provenance,purpose] [--approval-ref <id>] [--json]');
+    if (!name || !rpUrl || !action) fail('usage: aaf act <agent> <relying-party-url> <action> [--params \'{"…"}\'] [--ephemeral] [--disclose identity,provenance,purpose,principal_type,assurance,verification_source,chain_length] [--approval-ref <id>] [--json]');
     const { trust } = await federation();
     const agent = loadAgent(trust, name);
     const params = flags.params ? JSON.parse(flags.params) : {};
@@ -268,7 +284,7 @@ const commands = {
       mode: flags.ephemeral ? 'ephemeral' : 'pairwise', disclose, headers: flags['approval-ref'] ? { 'aaf-approval-ref': flags['approval-ref'] } : undefined,
     });
     if (flags.json) {
-      console.log(JSON.stringify({ decision: r.decision, classification: r.classification, reasons: r.reasons, tier: r.tier, ppid: r.ppid, result: r.result, approval_request: r.approval_request }, null, 2));
+      console.log(JSON.stringify({ decision: r.decision, classification: r.classification, reasons: r.reasons, tier: r.tier, missing_claims: r.missing_claims, ppid: r.ppid, id_mode: r.mode, result: r.result, approval_request: r.approval_request }, null, 2));
       return;
     }
     console.log(`${String(r.decision).toUpperCase()}  [${r.classification}${r.tier ? `, ${r.tier}` : ''}]${r.reasons?.length ? `  ${r.reasons.join('; ')}` : ''}`);
@@ -327,20 +343,43 @@ const commands = {
       const verifierId = flags.verifier ?? trust.doc.verifiers[0]?.id ?? fail('the federation has no identity verifier');
       const verifier = new IdentityVerifier({ id: verifierId, keys: loadKeys(verifierId, keysDir) });
       const principal = { id: request.principal_id, type: request.type, identity: request.identity, registry: trust.registry(request.registry) };
-      const res = await verifier.verify(principal, { assurance: flags.assurance ?? (request.type === 'natural_person' ? 'IAL2' : 'high'), method: flags.method ?? 'verified by the pilot team from personal knowledge' });
+      let res;
+      try {
+        res = await verifier.verify(principal, { assurance: flags.assurance ?? (request.type === 'natural_person' ? 'IAL2' : 'high'), method: flags.method ?? 'verified by the pilot team from personal knowledge' });
+      } catch (err) {
+        // One verified identity has one principal record. After a lost key, close the old record first.
+        if (err.code === 'duplicate_identity') fail(`${err.message}. If this person lost their key, close the old record first: aaf operator close-principal <its id>`);
+        throw err;
+      }
       console.log(`Verified ${request.identity.legal_name} (${request.principal_id}): ${res.trust_framework} ${res.assurance_level}.`);
     } else if (sub === 'resolve') {
-      const ppid = positional[1] ?? fail('usage: aaf operator resolve <ppid> --case "…" [--rp <relying-party-id>] [--related] [--no-notify] [--sealed-ref <jwe>] [--keys <dir>]');
+      const ppid = positional[1] ?? fail('usage: aaf operator resolve <id> --case "…" [--rp <relying-party-id>] [--related] [--no-notify] [--sealed-ref <jwe>] [--keys <dir>]');
       const authorityId = flags.authority ?? trust.doc.resolution_authorities[0]?.id ?? fail('the federation has no resolution authority');
       const authority = new ResolutionAuthority({ id: authorityId, name: authorityId, keys: loadKeys(authorityId, keysDir) });
       const order = authority.order({
         caseId: flags.case ?? fail('--case required'), ppids: [ppid], relyingParty: flags.rp, requester: flags.requester ?? 'pilot demonstration',
         scope: ['root_principal_identity', 'chain', ...(flags.related ? ['related_ppids'] : [])], notifyPrincipal: !flags['no-notify'],
       });
-      const registry = trust.registry(trust.registries.find((r) => ppid.startsWith(`ppid:${new URL(r.id).host}:`))?.id) ?? fail('no registry issued that PPID');
-      const res = await authority.resolve(registry, { order, ppid, sealedRef: flags['sealed-ref'] });
+      const res = await authority.resolve(issuerOf(trust, ppid), { order, ppid, sealedRef: flags['sealed-ref'] });
       console.log(JSON.stringify(res.result, null, 2));
-    } else fail('usage: aaf operator thumbprint|verify|resolve …');
+    } else if (sub === 'revoke') {
+      // A (demonstration) legal order that has the directory revoke the agent behind an ID.
+      const ppid = positional[1] ?? fail('usage: aaf operator revoke <id> --case "…" [--no-notify] [--sealed-ref <jwe>] [--keys <dir>]');
+      const authorityId = flags.authority ?? trust.doc.resolution_authorities[0]?.id ?? fail('the federation has no resolution authority');
+      const authority = new ResolutionAuthority({ id: authorityId, name: authorityId, keys: loadKeys(authorityId, keysDir) });
+      const order = authority.order({
+        caseId: flags.case ?? fail('--case required'), ppids: [ppid], requester: flags.requester ?? 'pilot demonstration',
+        scope: [ORDER_SCOPE_REVOKE], notifyPrincipal: !flags['no-notify'],
+      });
+      const res = await authority.revoke(issuerOf(trust, ppid), { order, ppid, sealedRef: flags['sealed-ref'] });
+      console.log(`${res.registration_id}: ${res.status}${res.already ? ' already' : ''}${res.cascades_to ? ` (and ${res.cascades_to} sub-agent(s))` : ''}, under order "${res.case}".`);
+    } else if (sub === 'close-principal') {
+      // Close a principal record so the same verified identity can enroll again (for example after a lost key).
+      const principalId = positional[1] ?? fail('usage: aaf operator close-principal <principal-id> [--registry <id>] [--reason "…"] [--admin-url <url>] [--keys <dir>]');
+      const registryId = flags.registry ?? trust.registries[0]?.id ?? fail('the federation has no registry');
+      const res = await postJson(`${adminUrlOf(registryId, flags)}/admin/principals/${principalId}/close`, { reason: flags.reason ?? 'operator' }, { authorization: `Bearer ${loadKeys(registryId, keysDir).adminToken}` });
+      console.log(`${res.principal_id}: ${res.status}${res.already ? ' already' : ''}${res.registrations_suspended ? ` (${res.registrations_suspended} agent(s) suspended)` : ''}. The same identity can now enroll again.`);
+    } else fail('usage: aaf operator thumbprint|verify|resolve|revoke|close-principal …');
   },
 
   help() {
@@ -355,7 +394,7 @@ const commands = {
   aaf agent list | aaf agent forget <name>
   aaf grant <agent> <action> [--max-amount 50:USD] [--categories a,b] [--delegable <n>] [--days 30]
   aaf delegate <parent> <child> <action> [constraints]
-  aaf act <agent> <relying-party-url> <action> [--params '{…}'] [--ephemeral] [--disclose identity]
+  aaf act <agent> <relying-party-url> <action> [--params '{…}'] [--ephemeral] [--disclose identity,assurance,…]
   aaf revoke <agent> [--reason …] [--parent <agent>]
   aaf transfer offer <agent> --to <principal-id> [--end-subagents]
   aaf transfer accept <offer-id> --as <name>
@@ -363,7 +402,9 @@ const commands = {
   Operators (on the federation's server, or with --keys <dir>):
   aaf operator thumbprint                             the trust anchor key participants should pin
   aaf operator verify <verification-request.json | -> [--assurance …]
-  aaf operator resolve <ppid> --case "…" [--rp <id>] [--related] [--no-notify]`);
+  aaf operator resolve <id> --case "…" [--rp <id>] [--related] [--no-notify]
+  aaf operator revoke <id> --case "…" [--no-notify]     revoke the agent behind an ID under a (demonstration) order
+  aaf operator close-principal <principal-id>          let the same verified identity enroll again (lost key)`);
   },
 };
 

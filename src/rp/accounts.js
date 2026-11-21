@@ -141,7 +141,13 @@ export function createAccounts({ rpId, origin, name }) {
 
 /** What the account holder is shown when an agent asks for access. */
 export function describeAccessRequest(details) {
-  const who = details.accountability;
-  return `${who.type.replace('_', ' ')} verified ${who.assurance} by ${who.verifier}; chain length ${who.chain_length}; requests ${details.scope.map(describePermission).join('; ')}`;
+  // The service shows whatever the agent disclosed about who stands behind it.
+  const who = details.accountability ?? {};
+  const shown = [
+    who.type ? who.type.replace('_', ' ') : 'a verified principal',
+    who.assurance && `verified ${who.assurance}`, who.verifier && `by ${who.verifier}`,
+    who.chain_length != null && `chain length ${who.chain_length}`,
+  ].filter(Boolean).join(' ').replace(' chain length', '; chain length');
+  return `${shown}; requests ${details.scope.map(describePermission).join('; ')}`;
 }
 

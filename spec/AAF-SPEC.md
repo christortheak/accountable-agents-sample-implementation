@@ -1,18 +1,28 @@
-# Accountable Agents Framework: Reference Profile 0.2
+# Accountable Agents Framework: Reference Profile 0.3
 
-**Status:** draft for discussion · **Date:** 17 October 2026
-**Companion to:** *The Accountable Agents Framework* (forthcoming)
+**Status:** draft for discussion · **Date:** 21 November 2026
+**Companion to:** *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026; "the paper")
 **Reference implementation:** this repository (`src/`), exercised by the simulator (`npm run sim`)
 
-**Changes since 0.1:** agent lineages with expiring sub-agents and depth budgets; transfer of agents between principals; passkeys (WebAuthn) for human approvals, for a service's human path, and for binding account access to specific accountable agents; and the profile now uses existing specifications wherever one fits. These are OpenID Federation, OpenID Connect for Identity Assurance, SD-JWT VC with Key Binding, the IETF Token Status List, RFC 9421 HTTP Message Signatures, RFC 9396 Rich Authorization Requests, RFC 8693 Token Exchange, CycloneDX 1.6 and RFC 8785. Its own designs are confined to what no existing specification covers (§15).
+**Changes since 0.2:** the profile is aligned with the paper's Appendix A requirements (§3 maps each one).
+- **Only the ID is required.** Every other claim in the accountability credential is selectively disclosable (PR-1, PR-5, PR-6), padded with decoy digests; relying parties ask for what their policy needs (PR-10) and may set acceptance criteria and choose which registries to accept.
+- **One principal record per verified identity** (PV-3).
+- **Agents prove possession of their key** at registration, key replacement and transfer (AG-2, AG-5).
+- **Revocation under a legal order**, and by the registry under its published practices (RV-1).
+- **Published practices** in each registry's metadata (DR-1).
+- **IDs** are written `aaf:<directory>:…`; "PPID" now means only the reusable, pairwise kind, as in the paper.
+
+**Changes from 0.1 to 0.2:** agent lineages with expiring sub-agents and depth budgets; transfer of agents between principals; passkeys (WebAuthn) for human approvals, for a service's human path, and for binding account access to specific accountable agents; and the profile now uses existing specifications wherever one fits. These are OpenID Federation, OpenID Connect for Identity Assurance, SD-JWT VC with Key Binding, the IETF Token Status List, RFC 9421 HTTP Message Signatures, RFC 9396 Rich Authorization Requests, RFC 8693 Token Exchange, CycloneDX 1.6 and RFC 8785. Its own designs are confined to what no existing specification covers (§15).
 
 ---
 
 ## 0. About this document
 
-*The Accountable Agents Framework* (forthcoming) describes the framework as "not a specification but … a framework against which implementations can be measured." This document is one such implementation, written as a specification. It turns each framework requirement into concrete formats, protocols and checks, and comes with running services and a transaction simulator that show the requirements are met.
+The paper is protocol-agnostic: its Appendix A lists the properties a system must have, and its conclusion invites "a reference implementation of a realistic workflow". This document is one such implementation, written as a specification. It turns each requirement into concrete formats, protocols and checks, and comes with running services and a transaction simulator that show the requirements are met.
 
-Where the framework leaves a choice open, this profile makes one and marks it **Profile choice**. Section 14 states what any implementation must do to be called conforming. Section 15 sets out which parts reuse existing specifications and which are new.
+Where the paper leaves a choice open, this profile makes one and marks it **Profile choice**. Section 3 maps the paper's requirements to this profile. Section 14 states what an implementation of this profile must do. Section 15 sets out which existing specifications are reused, and which of the paper's implementation options (its Appendix C) were chosen.
+
+The profile also does things the paper leaves out of scope or mentions only as complementary infrastructure: accredited record keepers, transfer of agents between principals, incident relay, bills of materials, activity logs, and passkey-bound account access. Section 3.2 lists them. They are extensions, not requirements of the paper.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119 and RFC 8174.
 
@@ -58,30 +68,51 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119
 
 ## 1. Terminology
 
+### 1.1 The paper's terms and this profile's
+
+The code and its APIs keep their earlier names. This table maps them to the paper's.
+
+| The paper says | This profile says | Notes |
+|---|---|---|
+| **Directory** | **Registry**, together with the **identity verifiers** it relies on and the **record keepers** it accredits | The paper lets a directory be "several entities acting together" and suggests dividing verification, issuance and record-keeping (its §3.1). Here the registry holds identities and issues IDs; record keepers hold authorizations, bills of materials and activity. |
+| **Counterparty** | **Relying party (RP)** | |
+| **Presentation**, **claims** | The `AAF-Presentation` header: an **accountability credential** (the ID and directory-attested claims), an optional **authorization credential**, an optional **approval** | Authorizations are attested by an accredited record keeper, which is part of the directory in the paper's sense. |
+| **ID** | The `sub` of the accountability credential, written `aaf:<directory host>:…` | API fields that carry it are still named `ppid`. |
+| **PPID** (reusable, one per agent and counterparty) | An ID in **pairwise** mode (`aaf:…:p_…`) | |
+| Unlinkable, single-use ID | An ID in **ephemeral** mode (`aaf:…:e_…`) | Earlier versions called this an "ephemeral PPID". |
+| **Identity escrow**, **attribution** | **Resolution** under a legal order (§7.11) | |
+| **Delegating agent**, sub-agent | **Parent agent**, sub-agent | |
+| **Principal record**, **agent record** | Principal record, **registration** | |
+| **Designated authority** | **Resolution authority** | |
+| Group of directories under one trust list | **Federation** under a **trust anchor** | The paper's Appendix C §9, option 1. |
+
+### 1.2 Terms
+
 | Term | Meaning in this profile |
 |---|---|
 | **Principal** | A natural or legal person responsible for an agent. It registers agents, grants them authority, and can revoke or transfer them. |
-| **Root principal** | The verified legal person at the top of an agent's chain. Every chain MUST end in one. |
-| **Parent agent** (the paper's *authorizing agent*) | An agent acting as principal of another agent. It registers sub-agents and delegates authority to them. |
+| **Root principal** | The verified principal at the top of an agent's chain. Every chain MUST end in one. **Profile choice:** these registries verify natural and legal persons (the paper's PV-2); the paper also allows other verified identities, such as control of a domain. |
+| **Parent agent** (the paper's *delegating agent*) | An agent acting as principal of another agent. It registers sub-agents and delegates authority to them. |
 | **Acting agent** | The agent that deals with a relying party. |
 | **Lineage** | An agent and every sub-agent below it. A **depth budget** caps how deep a lineage may grow. An **ephemeral** sub-agent has an expiry and lapses on its own. |
 | **Custody / transfer** | Which principal an agent answers to. A transfer moves an agent (and, by default, its lineage) to another principal. It is a new principal–agent relationship. |
-| **Chain version** | A counter that changes whenever the registration or any local ancestor changes hands. PPIDs, bindings and grants are scoped to it. |
+| **Chain version** | A counter that changes whenever the registration or any local ancestor changes hands. IDs, bindings and grants are scoped to it. |
 | **Agent provider** | The party that builds or operates the agent software. |
-| **Relying party (RP)** | Whoever the agent deals with. |
+| **Relying party (RP)** | Whoever the agent deals with (the paper's *counterparty*). |
 | **Trust anchor** | The federation's governance body, in OpenID Federation terms. It publishes its Entity Configuration and signs a Subordinate Statement about each member. |
-| **Registry** | Verifies principals (through identity verifiers), registers agents into chains, issues PPIDs and accountability credentials, publishes status, points to record keepers, accredits record keepers (trust marks), and resolves PPIDs under consent or legal process. |
+| **Registry** | Verifies principals (through identity verifiers), registers agents into chains, issues IDs in accountability credentials, publishes status and its practices, points to record keepers, accredits record keepers (trust marks), and resolves IDs under consent or legal process. |
 | **Record keeper (RK)** | Holds authorization, provenance and activity records. The authorization role also runs the token-exchange endpoint. |
-| **PPID** | Privacy-preserving identifier. It names one principal–agent relationship and is resolvable only by its registry. It is either **pairwise** (per relying party) or **ephemeral** (per presentation). |
-| **Accountability credential** | Registry-issued SD-JWT VC stating that a PPID belongs to an active registration whose chain ends in a verified legal person (§7.6). |
+| **ID** | The identifier an agent presents. It reveals nothing by itself, names one principal–agent relationship, and is resolvable only by its registry. It is either **pairwise** (a **PPID**: the same at every visit to one relying party, and at most one per agent and relying party) or **ephemeral** (single-use: a new one for each presentation). |
+| **Accountability credential** | Registry-issued SD-JWT VC that carries an ID and states that it resolves to a principal the registry verified. Every further claim in it is optional (§7.6). |
 | **Grant** | Principal-signed (or parent-agent-signed) statement of authority, expressed as `authorization_details`, deposited as an authorization record (§8.2). |
 | **Authorization credential** | RK-issued SD-JWT VC obtained by token exchange: audience-specific, selectively disclosable, bound to the same key as the accountability credential (§8.3). |
 | **Designation / approval** | A principal designates a human to a role. That person's approval of a specific act, countersigned by the RK, is an approval credential (§8.4). |
-| **Sealed reference** | Encrypted registration reference attached to an ephemeral PPID that only the issuing registry can open (§5.3). |
+| **Sealed reference** | Encrypted registration reference attached to a single-use ID that only the issuing registry can open (§5.3). |
 | **Passkey** | A WebAuthn credential: a key pair whose private key stays on the person's device and signs only after a local check (user presence; user verification by biometric or PIN). |
 | **Passkey approval** | A WebAuthn assertion over a challenge that commits to exactly what is being approved (§10.5). |
 | **Agent-bound account access** | A service's rule that an agent may act on an account only if the account holder approved that specific accountable agent (its PPID at the service) with a passkey (§10.5). |
-| **Resolution** | Disclosure of the root principal behind a PPID to a resolution authority, under a legal order (§7.11). |
+| **Published practices** | What a registry states about how it verifies, authenticates, issues, revokes, retains and discloses (§7.14; the paper's DR-1). |
+| **Resolution** | Disclosure of the root principal behind an ID to a resolution authority, under a legal order (§7.11). The paper calls this attribution, through identity escrow. |
 
 ---
 
@@ -97,7 +128,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119
                     ▼                                                           ▼
                   Registry A ◀── federation: peer status, push, forwarding ──▶ Registry B
                   · verified principals · lineages → root · status lists · record pointers
-                  · PPIDs + accountability credentials (SD-JWT VC) · trust marks · transparency log
+                  · IDs in accountability credentials (SD-JWT VC) · trust marks · transparency log
       │                            ▲  "still valid? who, exactly?"
       ▼                            │  (status list; resolution under legal process)
  TRANSACTION      Acting agent ── RFC 9421-signed request + SD-JWT VCs with key binding ──▶ Relying party
@@ -122,7 +153,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119
 | Transaction | Agent obtains an accountability credential for the RP | agent → registry | fast, cached per RP |
 | | Agent exchanges grant + credential for an authorization credential (RFC 8693) | agent → authorization RK | fast, cached per RP |
 | | Agent sends a signed request with key-bound credentials | agent → RP | per request |
-| | RP verifies, checks status lists and trust marks, applies policy, logs | RP → registry, RK | ~2–5 ms locally |
+| | RP verifies with published keys, status lists and trust marks; applies policy; logs | RP (no call about any one ID) | ~2–5 ms locally |
 | | Agent and RP each write their account to the activity log | both → activity RK | per request |
 | After | Incident report relayed to the principal | RP → registry → principal | immediate |
 | | Revocation or expiry, cascading down the lineage and across registries | registry → status lists, peers | immediate (push), bounded (pull) |
@@ -134,32 +165,63 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in RFC 2119
 | Party | Knows | Does not know |
 |---|---|---|
 | Trust anchor | the federation's members and their keys | anything about principals or agents |
-| Registry | principals' verified identities; every registration, lineage, custody history and status; pairwise PPIDs it issued and their audiences | grants, activity, provenance contents; which credential an RP checks (status lists are fetched whole) |
-| Authorization RK | grants and their grantors; which PPID (per audience) each grant was exchanged for | principal's verified identity beyond its registry handle; what happened at the RP |
+| Registry | principals' verified identities; every registration, lineage, custody history and status; the PPIDs it issued and their audiences; which RP each credential is requested for, and when (issuance is on demand, §16) | grants, activity, provenance contents; which credential an RP checks (status lists are fetched whole); what the agent discloses or does at the RP |
+| Authorization RK | grants and their grantors; which ID (per audience) each grant was exchanged for | principal's verified identity beyond its registry handle; what happened at the RP |
 | Provenance RK | bills of materials per build | which agents use a build |
-| Activity RK | signed entries per PPID | who the principal is |
-| Relying party | a PPID valid only at that RP; root principal type, trust framework, assurance and verifier; chain length; delegation depth; attributes and identity *only if disclosed by consent*; only the permissions relevant to the request | identity (unless disclosed); anything linking the agent to its activity at another RP, or to an earlier owner's activity |
-| Resolution authority | the principal accountable at the time, the chain, custody history, related PPIDs at the requesting RP, all within the order's scope | nothing beyond the order's scope |
+| Activity RK | signed entries per ID | who the principal is |
+| Relying party | an ID valid only at that RP, and that its registry verified a principal who answers for it. Beyond that, only what it asks for and the agent discloses: the kind of principal, its assurance level, who verified it, the chain length; attributes and identity *only with the principal's consent*; only the permissions relevant to the request (and, with those, the delegation depth) | identity (unless disclosed); anything it did not ask for; anything linking the agent to its activity at another RP, or to an earlier owner's activity |
+| Resolution authority | the principal accountable at the time, the chain, custody history, related IDs at the requesting RP, all within the order's scope | nothing beyond the order's scope |
 
 ---
 
 ## 3. Requirements traceability
 
-| Paper requirement (§2) | Mechanism in this profile | Simulator scenario |
+### 3.1 The paper's Appendix A
+
+"Test" names a file in `test/` or a simulator scenario that exercises the requirement.
+
+| Requirement | Status | Mechanism in this profile | Test |
+|---|---|---|---|
+| **PV-1** Identity proofing | met | An identity verifier submits OpenID Identity Assurance `verified_claims`; agents can be registered only while the verification is valid; a lapse suspends them (§6.3, §7.2, §7.7) | `services`; all scenarios |
+| **PV-2** Human and legal entity proofing (optional) | met | The only kinds these registries accept. Each ID can show the trust framework and assurance level (§7.6) | scenarios 1, 4 |
+| **PV-3** Sybil resistance | met | One principal record per verified identity; a second is refused at verification (§7.2) | `paper-requirements`, `pilot` |
+| **PV-4** Sybil resistance across directories (optional) | not implemented | | |
+| **PV-5** Principal authentication | met | Every principal request is signed with the key enrolled in its record (§4.3) | `services` |
+| **AG-1** Agent authentication | met | To the registry: requests signed with the agent's long-term key. To relying parties: a per-RP or per-presentation key bound into the ID's credential (§7.6, §9.2) | `rp-cnf-key-binding` |
+| **AG-2** Registration | met | Only a verified principal or a parent agent can register an agent, and the agent proves it holds the key bound to its record (§7.4) | `paper-requirements` |
+| **AG-3** Delegation (optional) | met | Parent agents register and revoke sub-agents; authority only narrows; revocation cascades (§7.5, §11.3) | scenarios 5, 7 |
+| **AG-4** Multiple principals (optional) | not implemented | | |
+| **AG-5** Re-registration (optional) | met | The principal, or an agent above, replaces an agent's key; the new key proves possession; the change is logged and earlier IDs still resolve (§7.5) | `paper-requirements`; scenario 7 |
+| **PR-1** ID | met | Every presentation carries an ID naming its registry; no other claim is required (§5.3, §7.6) | `paper-requirements` |
+| **PR-2** Holder binding | met | The request is signed with the credential's `cnf` key, with a Key Binding JWT (§9.2, §10.1) | `rp-cnf-key-binding`, `rp-key-binding-controls` |
+| **PR-3** Validity | met | Expiry in each credential; published status lists (§7.7, §8.7) | `status-list`; scenarios 1, 4 |
+| **PR-4** Claims and their issuers | met | Each credential names its issuer: the registry for the ID and claims about the principal, an accredited record keeper for authority and approvals. A claim with no issuer behind it is classified `UNSUPPORTED` (§10.2) | scenario 4 |
+| **PR-5** Selective disclosure | met | SD-JWT; the principal's disclosure policy decides what may be shown, and the agent what is shown; decoy digests hide how much is withheld (§4.2, §7.3, §7.6) | `paper-requirements` |
+| **PR-6** Anonymity toward counterparties | met | A presentation of the ID alone tells the RP only that the registry verified a principal (§2.3) | `paper-requirements` |
+| **PR-7** Unlinkability | met toward RPs | Single-use IDs with per-presentation keys; nothing two RPs receive matches (§12.1). The registry itself can link them (§16) | scenarios 1, 4, 7 |
+| **PR-8** PPIDs (optional) | agent PPIDs met | Pairwise mode: one stable ID per agent and RP, marked `id_mode: "pairwise"` by the registry (§5.3). Principal PPIDs and PPIDs shared by a group of RPs are not implemented | scenario 1 |
+| **PR-9** No directory contact | met | An RP verifies with the registry's published keys and its whole status list; it never asks about one ID (§7.7, §10.1) | all scenarios |
+| **PR-10** Presentation requests | met | RP metadata states what each action needs; a missing claim gets `step_up` with `missing_claims`, and the agent presents again (§9.1, §10.3) | `paper-requirements`; scenarios 2, 4 |
+| **RV-1** Revocation | met, with one gap | By the principal, a parent agent, the registry under its published practices, or a legal order; the record is kept (§7.8, §7.11). A principal revokes a single grant (§8.2). A registry cannot yet withdraw one attribute before it expires (§16) | `paper-requirements`; scenarios 1, 3, 4 |
+| **RV-2** Revocation latency | met | Published in the registry's practices and enforced by credential lifetime and status-list refresh (§7.8, §7.14) | scenario 1 |
+| **ES-1** Identity escrow | met | A legal order resolves an ID to the principal accountable when it was issued, across registries, after revocation and after a transfer (§7.11) | scenarios 1, 3–7 |
+| **ES-2** Multi-party control (optional) | not implemented | | |
+| **DR-1** Published practices | met | In each registry's Entity Configuration and at `/v1/practices` (§7.14) | `paper-requirements` |
+| **DR-2** Adherence | met for what is stated | The practices statement is generated from the running configuration. Nothing is deleted, so retention holds trivially (§16) | |
+| **DR-3** Conformity assessment (optional) | not implemented | Admission by the trust anchor and the public transparency log are the nearest things here (§6.1, §7.13) | |
+
+### 3.2 Beyond the paper
+
+The paper leaves these out of scope, or names them as complementary. They are this profile's extensions.
+
+| Extension | Where | Relation to the paper |
 |---|---|---|
-| **Accountability**: it is evident whether a verified legal person answers for the agent | Registrations require a verified root (§7.4); credentials state root type and IDA verification (§7.6); six-way classification (§10.2) | 1–5, 7 |
-| Identity preserved and available through due process | Registry keeps verified identity; legal orders resolve PPIDs, across registries and across custody changes (§7.11) | 1, 3, 4, 5, 6, 7 |
-| **Privacy**: reveal *that* a party is answerable, not *who* | Pairwise and ephemeral PPIDs; per-RP keys; SD-JWT selective disclosure; consent-based identity disclosure; token exchange hides the principal's signature; status lists hide which credential is checked (§12) | 1, 2, 4, 7 |
-| **Counterparty decision-making**: authority, build, history | RAR authority, approvals, CycloneDX provenance, IDA attributes, policy tiers (§§8, 10) | 1, 2, 4 |
-| **Availability and reliability**: machine-readable, fast, attributable, unaltered | Signed JSON artifacts; status lists; Merkle logs with receipts (§§4, 8.1) | all; 6 |
-| **Extensibility**: sector norms | Open `authorization_details` types and constraints, attributes, RP policy tiers (§§10.3, 11) | 1, 2, 4 |
-| Agents may be principals of agents (chains); temporary sub-agents | Lineages, depth budgets, expiring registrations, cascading status (§7.5) | 7 |
-| Federation: PPIDs embed registry; cross-registry resolution; consistent status | PPID syntax; remote-parent registration; forwarding; push + bounded pull (§7.12) | 5 |
-| Revocation within a stated interval; no deletion of history | Credential TTL ≤ revocation interval; status lists; records retained (§7.8) | 1, 3, 4, 5, 7 |
-| Transfer of agents between principals | Two-party transfer; chain version bump; old PPIDs "transferred"; accountability by time (§7.9) | 7 |
-| Accreditation; RK compromise leaves the registry's chain of custody intact | Trust marks checked live; RK receipts and consistency proofs; registry transparency log (§§6.4, 7.13, 8.1) | 6 |
-| Partial adoption: unlabeled ≠ rogue; lookup failure ≠ no principal | Classification; `deferred` decision (§10.2) | 3, 4 |
-| Stopping stolen credentials; agents posing as humans | Passkeys: human path, agent-bound account access, step-up (§10.5) | 3 (branch C) |
+| Accredited record keepers for authorizations, bills of materials and activity | §6.4, §8 | One way to divide record-keeping across organizations (paper §3.1). Activity records are the "independently verifiable activity records" of paper §3.5 |
+| Transfer of an agent between principals | §7.9 | Not in the paper. AG-5 covers only replacing an agent's key |
+| Incident relay to a principal the reporter cannot identify | §7.10 | The paper's §3.3 says a counterparty can report an incident; the relay is this profile's design |
+| Classifications, including "unlabeled" and "lookup failed" | §10.2 | The paper's conclusion asks a pilot to cover unsupported claims and revoked credentials |
+| Passkey approvals, the human path, agent-bound account access | §8.4, §10.5 | The paper's §3.5 mentions a step-up proof of human authorization |
+| Sub-agents registered at another registry | §7.12 | The paper leaves multi-directory chains to implementations |
 
 ---
 
@@ -181,6 +243,7 @@ All signed artifacts are JWS compact serializations (RFC 7515) with `alg: "EdDSA
 | `aaf-status+jwt` | live status with reasons (between registries; investigators) | registry | this profile |
 | `aaf-resolution+jwt`, `aaf-resolution-forward+jwt` | resolution result; forwarding between registries | registry | this profile |
 | `aaf-legal-order+jwt` | legal order | resolution authority | this profile |
+| `aaf-agent-proof+jwt` | an agent's proof that it holds a key (§7.4) | the agent key | this profile |
 | `aaf-grant+jwt` | grant or role designation | principal or parent agent | this profile (body is RAR) |
 | `aaf-provenance+jwt` | provenance record | provider | this profile (body is CycloneDX 1.6) |
 | `aaf-activity+jwt` | activity log entry | agent or relying party | this profile |
@@ -190,7 +253,7 @@ Credential types are named under the trust anchor: `https://federation.aaf.test/
 
 ### 4.2 Selective disclosure and key binding
 
-Credentials use IETF SD-JWT. Each selectively disclosable value is replaced by the digest of a salted disclosure. Holders drop disclosures they do not want to reveal and append a Key Binding JWT `{iat, aud, nonce, sd_hash}` signed with the credential's `cnf` key. Verifiers MUST reject unreferenced or duplicate disclosures, and MUST require a valid KB-JWT for holder-bound credentials. The KB-JWT `iat` MUST be a NumericDate (a finite JSON number, possibly fractional) within the verifier's freshness window; a missing or non-numeric `iat` is invalid.
+Credentials use IETF SD-JWT. Each selectively disclosable value is replaced by the digest of a salted disclosure. Holders drop disclosures they do not want to reveal and append a Key Binding JWT `{iat, aud, nonce, sd_hash}` signed with the credential's `cnf` key. Verifiers MUST reject unreferenced or duplicate disclosures, and MUST require a valid KB-JWT for holder-bound credentials. Issuers pad disclosable sets with **decoy digests** to a fixed count, so the number of digests does not show how many values a holder could disclose; verifiers ignore digests with no disclosure. The KB-JWT `iat` MUST be a NumericDate (a finite JSON number, possibly fractional) within the verifier's freshness window; a missing or non-numeric `iat` is invalid.
 
 **Rule (non-negotiable):** only grants of capability may be selectively disclosable. Hiding a permission can only understate what an agent may do. Prohibitions and every constraint inside an `authorization_details` entry MUST always be visible whenever the entry is visible.
 
@@ -229,27 +292,30 @@ Every federation member has an https URL as its OpenID Federation entity identif
 
 Principal ids (`prn_…`) and registration ids (`reg_…`) are 128-bit random values known only to the registry, the principal, the agent and record keepers. They MUST NOT appear in anything presented to a relying party.
 
-### 5.3 PPIDs
+### 5.3 IDs and PPIDs
 
 ```
-ppid:<registry host>:p_<26 base32>      pairwise:  HMAC-SHA256(registry secret, registration ‖ chain version ‖ audience)
-ppid:<registry host>:e_<26 base32>      ephemeral: random; with sealed_ref = JWE{ppid, registration, audience, version, root, iat}
+aaf:<registry host>:p_<26 base32>      pairwise (a PPID):   HMAC-SHA256(registry secret, registration ‖ chain version ‖ audience)
+aaf:<registry host>:e_<26 base32>      ephemeral (single-use): random; with sealed_ref = JWE{id, registration, audience, version, root, iat}
 ```
 
-| Property (paper §3.1) | How it is met |
+The credential's `id_mode` claim says which kind an ID is, so an RP that needs a stable identifier (for an account, rate limits or reputation) can require a PPID. Earlier versions wrote `ppid:` for both kinds; registries still read that prefix. API fields that carry an ID are still named `ppid`.
+
+| Property | How it is met |
 |---|---|
-| One identifier, one principal–agent relationship | the relationship is (registration, chain version). A transfer bumps the version, which yields new PPIDs. |
-| An RP cannot correlate activity across services by comparing presentations | different value per audience (pairwise) or per presentation (ephemeral), plus a per-audience or per-presentation key |
-| Only the registry can resolve it | pairwise: registry mapping; ephemeral: only the registry can open `sealed_ref`, which the RP retains |
-| Embeds the issuing registry | the host component (federation requirement 1) |
+| The ID resolves to its registry (PR-1) | the host component |
+| At most one PPID per agent and RP; no two agents share one (PR-8) | the pairwise value is a keyed hash of the registration, its chain version and the audience |
+| One ID, one principal–agent relationship | the relationship is (registration, chain version). A transfer bumps the version, which yields new IDs |
+| RPs cannot link an agent by comparing presentations (PR-7) | a different value per audience (pairwise) or per presentation (ephemeral), plus a per-audience or per-presentation key |
+| Only the registry can resolve it (ES-1) | pairwise: the registry's own mapping; ephemeral: only the registry can open `sealed_ref`, which the RP retains |
 
-At issuance the registry records, for each PPID, **which root principal was accountable**. Resolution of that PPID always returns that principal, even after a later transfer (§7.11).
+At issuance the registry records, for each ID, **which root principal was accountable**. Resolution of that ID always returns that principal, even after a later transfer (§7.11).
 
-**Profile choice:** ephemeral credentials are registry-issued one-time credentials. The registry could link issuance to use; blind or zero-knowledge credentials (BBS) would remove that (§16).
+**Profile choice:** IDs are issued on demand, one credential per RP or per presentation (the paper's Appendix C §3, option 1). The registry therefore learns which RP each credential is for, and could link a single-use ID's issuance to its use. Batch issuance or anonymous credentials (options 2 and 3) would remove that (§16).
 
 ### 5.4 Registration binding
 
-`reg_binding = base64url(SHA-256("aaf-binding|" ‖ registration ‖ "|" ‖ chain version ‖ "|" ‖ ppid))` appears in every accountability credential. A record keeper that knows a grant's registration and version can confirm, offline, that a PPID belongs to that agent under that principal relationship. RPs cannot invert it, and it differs for every PPID.
+`reg_binding = base64url(SHA-256("aaf-binding|" ‖ registration ‖ "|" ‖ chain version ‖ "|" ‖ ppid))` appears in every accountability credential. A record keeper that knows a grant's registration and version can confirm, offline, that an ID belongs to that agent under that principal relationship. RPs cannot invert it, and it differs for every ID.
 
 ---
 
@@ -270,7 +336,7 @@ Services refresh this every 30 s. The result is each party's view of the federat
 | Metadata type | Members | Key fields |
 |---|---|---|
 | `aaf_trust_anchor` | the governance body | `policies` (revocation interval, credential TTL, status cache and list TTL, max chain depth, retention) |
-| `aaf_registry` | registries | `organization_name`, `jurisdiction`, `endpoint_base`, `jwks` (signing + encryption), `ppid_modes`, `endpoints`, `policies` |
+| `aaf_registry` | registries | `organization_name`, `jurisdiction`, `endpoint_base`, `jwks` (signing + encryption), `id_modes`, `practices` (§7.14), `endpoints`, `policies` |
 | `aaf_record_keeper` | record keepers | `organization_name`, `roles`, `endpoint_base`, `jwks`, `endpoints` |
 | `aaf_identity_verifier` | KYC/KYB providers | `organization_name`, `jwks` |
 | `aaf_resolution_authority` | courts, regulators | `organization_name`, `jwks` |
@@ -289,7 +355,7 @@ Verifiers submit an IDA `verified_claims` object to the registry (`POST /v1/prin
   "claims": { …exactly the enrolled identity claims… } }
 ```
 
-The registry MUST reject a submission whose `claims` differ from the enrolled identity (compared with JCS). **Principal attributes** (licensure, insurance, charter) are also `verified_claims`, one claim each, with the record `source`. This meets the paper's §5.2 requirement that "source, verification status, scope, and currentness" be reliable.
+The registry MUST reject a submission whose `claims` differ from the enrolled identity (compared with JCS). **Principal attributes** (licensure, insurance, charter) are also `verified_claims`, one claim each, with the record `source`, so an RP can tell who attested each claim and how (the paper's PR-4).
 
 ### 6.4 Accreditation of record keepers: trust marks
 
@@ -310,16 +376,20 @@ The trust anchor's `trust_mark_issuers` states which registries may issue which 
 
 | Record | Fields |
 |---|---|
-| Principal | `id`, `type`, `identity`, `contact`, `keys`, `verification` (IDA), `attributes` (IDA), `disclosure` policy |
+| Principal | `id`, `type`, `identity`, `contact`, `keys`, `verification` (IDA), `identity_key` (§7.2), `attributes` (IDA), `disclosure` policy, `closed` |
 | Registration | `id`, `agent_jwk` (long-term key), `parent`, `root_principal` or `root_summary` (remote), `depth`, `epoch`, `custody` history, `expires_at`, `lineage_max_depth`, `provider`, `records`, `label`, `status` |
-| PPID | pairwise: `{registration, audience, version, root at issuance, status index}`; ephemeral: a status-list entry kept only until the credential expires |
+| ID | pairwise: `{registration, audience, version, root at issuance, status index}`; ephemeral: a status-list entry kept only until the credential expires |
 | Transfer offers, accreditations, incidents, notifications, resolutions | as below |
 
-Per the paper, the registry stores no authorizations, bills of materials or activity.
+The registry stores no authorizations, bills of materials or activity: accredited record keepers hold those (§8), so the party that knows identities does not also hold what agents are allowed to do or did.
 
 ### 7.2 Enrollment and verification (the slow step)
 
 `POST /v1/principals` (signed, `keyid="jkt:…"`) creates a pending principal. `POST /v1/principals/{id}/verification` from a trusted verifier (§6.3) verifies it. This happens once.
+
+**One record per verified identity (PV-3).** When a verification arrives, the registry derives an identity key from the verified claims and refuses a second record for the same identity (`409 duplicate_identity`). **Profile choice:** a legal entity is keyed by its LEI, else its jurisdiction and registration number; a natural person by name, jurisdiction and date of birth where given. A real registry would key on the evidence its proofing produced; names alone are weak.
+
+A person who loses their key cannot simply enroll again. The operator closes the old record (`POST /admin/principals/{id}/close`): its agents are suspended, the record and its history are kept so earlier IDs can still be resolved, and the identity may then enroll and be verified afresh.
 
 ### 7.3 Disclosure policy (consent)
 
@@ -328,7 +398,7 @@ Per the paper, the registry stores no authorizations, bills of materials or acti
 
 ### 7.4 Registration (the fast step)
 
-`POST /v1/registrations` with `{agent_jwk, parent, records, provider, label, expires_in?, lineage?: {max_depth}}`:
+`POST /v1/registrations` with `{agent_jwk, agent_proof, parent, records, provider, label, expires_in?, lineage?: {max_depth}}`:
 
 | `parent.type` | Signed by | Checks |
 |---|---|---|
@@ -336,14 +406,16 @@ Per the paper, the registry stores no authorizations, bills of materials or acti
 | `agent` | parent agent's long-term key | parent `active`; depth ≤ `maxChainDepth` (federation policy, 8); **every ancestor's depth budget** respected (`403 lineage_depth_exceeded`) |
 | `remote_agent` | the parent's presentation key for this registry (`jkt:`) | `parent.attestation` is an accountability credential from a peer registry, `aud` = this registry, unexpired, `cnf` = signing key, peer reports it `active` |
 
-The agent key MUST be new to the registry. Every `records` pointer MUST name a keeper holding this registry's trust mark for that role. The **registration receipt** (`aaf-registration+jwt`) carries `{iss, sub, agent_key, principal (current parent link), depth, version, records, expires_at}`. Record keepers use it to verify grants. `POST /v1/registrations/{id}/receipt` re-issues it, for example after the lineage changes hands.
+The agent key MUST be new to the registry, and the agent MUST prove it holds it (AG-2): `agent_proof` is an `aaf-agent-proof+jwt` signed with `agent_jwk`, with claims `{aud: <registry>, purpose: "aaf-agent-registration", binding: <the registrant's keyid>, agent_key: <thumbprint>, iat}`. The registry rejects a proof that is older than 120 s or was made for another registry, purpose or registrant. A principal therefore cannot register a key that no agent of its holds, and a proof cannot be reused by a different registrant.
+
+Every `records` pointer MUST name a keeper holding this registry's trust mark for that role. The **registration receipt** (`aaf-registration+jwt`) carries `{iss, sub, agent_key, principal (current parent link), depth, version, records, expires_at}`. Record keepers use it to verify grants. `POST /v1/registrations/{id}/receipt` re-issues it, for example after the lineage changes hands.
 
 ### 7.5 Lineages, expiry and depth budgets
 
 - **Expiry.** `expires_in` makes a registration lapse on its own (status `expired`). No sub-agent outlives its parent: the registry clamps a child's expiry to the earliest expiry along its chain. Credentials never outlive the registration (`exp` ≤ effective expiry).
 - **Depth budgets.** `lineage.max_depth` on any registration caps how many levels of sub-agents may exist below it. The federation's `maxChainDepth` caps every chain.
 - **Cascade.** A registration's status is computed along its chain (§7.7). Revocation, expiry or suspension of any ancestor applies at once to every descendant, including those registered with peer registries.
-- **Key rotation.** `POST /v1/registrations/{id}/rotate-key`, signed by the root principal or an ancestor agent, replaces an agent's long-term key without changing its PPIDs.
+- **Key rotation (AG-5).** `POST /v1/registrations/{id}/rotate-key {agent_jwk, agent_proof}`, signed by the root principal or an ancestor agent, replaces an agent's long-term key without changing its PPIDs. The proof (purpose `aaf-agent-key-rotation`, bound to the registration) is signed with the new key. The change is logged, so IDs presented under the old key still resolve.
 
 ### 7.6 Accountability credentials (SD-JWT VC)
 
@@ -352,41 +424,54 @@ The agent key MUST be new to the registry. Every `records` pointer MUST name a k
 | Claim | Always visible | Notes |
 |---|---|---|
 | `vct` | ✓ | `…/vct/accountability/1` |
-| `iss`, `sub` (PPID), `aud`, `iat`, `exp`, `jti` | ✓ | `exp` = min(iat + TTL, registration expiry) |
+| `iss`, `sub` (the ID), `aud`, `iat`, `exp`, `jti` | ✓ | `exp` = min(iat + TTL, registration expiry) |
 | `cnf.jwk` | ✓ | per-audience or per-presentation key |
 | `status.status_list` | ✓ | `{idx, uri}` in the registry's Token Status List; random index |
-| `ppid_mode`, `reg_binding` | ✓ | |
-| `accountability.status` | ✓ | always `"accountable"` |
-| `accountability.root_principal.{type, verified, verification, registry, identity}` | ✓ | `verification` = IDA summary `{trust_framework, assurance_level, time (month), verifier}`; `identity` = `protected` or `disclosable` |
-| `accountability.root_principal.disclosed_identity.*` | SD | only audiences named in the disclosure policy |
-| `accountability.chain_length` | ✓ | |
+| `id_mode`, `reg_binding` | ✓ | `pairwise` (a PPID) or `ephemeral` (single-use) |
+| `accountability.status` | ✓ | always `"accountable"`: the registry's statement that the ID resolves to a principal it verified under its published practices |
+| `accountability.principal_type` | SD | `natural_person` or `legal_person` |
+| `accountability.assurance` | SD | `{trust_framework, assurance_level}` from the IDA verification |
+| `accountability.verification_source` | SD | `{verifier, time (month)}` |
+| `accountability.principal_directory` | SD | the registry holding the principal's record (differs from `iss` for a sub-agent registered elsewhere, §7.12) |
+| `accountability.chain_length` | SD | the number of agents in the chain, counting this one |
+| `accountability.{legal_name, jurisdiction, registration_number, lei}` | SD (each) | present only for audiences named in the principal's disclosure policy |
 | `accountability.attributes[]` | SD (each) | IDA `verified_claims` per attribute, with `valid_until` (month) |
 | `records[]` (`{role, rk, ref?}`) | SD (each) | pointers to authorization, provenance and activity keepers |
 | `sealed_ref` | ✓ | ephemeral mode only |
 
+**The ID alone is a valid presentation** (PR-1). With every disclosure withheld, an RP learns the ID, its registry and that the registry verified a principal who answers for the agent; nothing about what kind of principal, how it was verified or how long the chain is (PR-6). `accountability` and the two arrays are padded with decoy digests to fixed counts, so two principals' credentials have the same shape whatever each could disclose.
+
 ### 7.7 Status
 
-A registration's status is computed along its chain: revoked → `revoked`; past expiry → `expired`; parent principal's verification lapsed → `suspended`; local parent not active → the parent's status (`upstream:<reason>`); remote parent → the peer's status (cached ≤ `statusCacheSeconds`; a peer that cannot be reached gives `unknown`; a transferred remote parent gives `revoked`, reason `parent_transferred`). A PPID whose chain version is no longer current is `transferred`.
+A registration's status is computed along its chain: revoked → `revoked`; past expiry → `expired`; parent principal's verification lapsed, or its record closed → `suspended`; local parent not active → the parent's status (`upstream:<reason>`); remote parent → the peer's status (cached ≤ `statusCacheSeconds`; a peer that cannot be reached gives `unknown`; a transferred remote parent gives `revoked`, reason `parent_transferred`). An ID whose chain version is no longer current is `transferred`.
 
 The status is published two ways:
 
 - **Token Status List** (`GET /status-lists/1`, `statuslist+jwt`, 2 bits per entry, 65,536 entries, zlib): `VALID` (active), `INVALID` (revoked, expired), `SUSPENDED` (suspended, unknown), `TRANSFERRED` (0x03, application-specific). The token's `ttl` is `statusListTtlSeconds` (10 s). RPs fetch the whole list, so the registry does not learn which credential is being checked. Reasons are not published.
-- **Live status** (`POST /v1/status {ppid, sealed_ref?}` → `aaf-status+jwt` with reasons), used between federation peers and by investigators.
+- **Live status** (`POST /v1/status {ppid, sealed_ref?}` → `aaf-status+jwt` with reasons), used between federation peers and by investigators. RPs MUST NOT use it to verify presentations: asking about one ID would tell the registry which RP is dealing with which agent (the paper's PR-9).
 
 ### 7.8 Revocation
 
-`POST /v1/registrations/{id}/revoke {reason}` may be signed by the root principal, any local ancestor agent, the remote parent's presentation key, or the operator. Reasons: `principal_request`, `compromised`, `authority_ended`, `fraud`, `legal_order`, `superseded`, `parent_transferred`. Revocation cascades (§7.5), is pushed to peers (§7.12), and stops only **future** reliance. History is retained.
+A registration can be revoked by four parties (RV-1):
 
-**Revocation interval guarantee.** An RP that fetches the status list for a consequential action sees revocation within one list generation, which is immediate in this implementation. An RP using a cached list sees it within the list's `ttl`. One that skips status entirely stops accepting a credential within `attestationTtlSeconds` (300 s). Peer registries see it immediately by push, or within `statusCacheSeconds` (15 s) by pull.
+| By | How |
+|---|---|
+| the root principal, or any agent above it in its chain | `POST /v1/registrations/{id}/revoke {reason}`, signed; a remote parent signs with its presentation key |
+| the registry, under its published practices (for example fraud) | the operator's `POST /admin/registrations/{id}/revoke` |
+| a recognized authority | a legal order with the `revoke_registration` scope (§7.11) |
+
+Reasons: `principal_request`, `compromised`, `authority_ended`, `fraud`, `legal_order`, `superseded`, `parent_transferred`. Revocation cascades (§7.5), is pushed to peers (§7.12), and stops only **future** reliance. The record is kept, so earlier presentations can still be attributed. Revoking a registration does not link its single-use IDs to one another for RPs.
+
+**Revocation latency (RV-2).** The bound is published in the registry's practices (§7.14). An RP that fetches the status list for a consequential action sees revocation within one list generation, which is immediate in this implementation. An RP using a cached list sees it within the list's `ttl`. One that skips status entirely stops accepting a credential within `attestationTtlSeconds` (300 s). Peer registries see it immediately by push, or within `statusCacheSeconds` (15 s) by pull.
 
 ### 7.9 Transfer between principals
 
 A transfer is a new principal–agent relationship. The old principal remains answerable for what happened before it.
 
 1. **Offer.** The principal an agent is *directly* registered under signs `POST /v1/registrations/{id}/transfer-offers {to_principal, subtree: "move" | "end", expires_in}`. The recipient is notified. The offerer may cancel.
-2. **Acceptance.** The named recipient signs `POST /v1/transfer-offers/{offer}/accept {agent_jwk}`. The recipient MUST be a verified principal, the offer unexpired, the agent active and still in the offered custody, and `agent_jwk` a **fresh** key, because the previous owner may hold the old one.
+2. **Acceptance.** The named recipient signs `POST /v1/transfer-offers/{offer}/accept {agent_jwk, agent_proof}`. The recipient MUST be a verified principal, the offer unexpired, the agent active and still in the offered custody, and `agent_jwk` a **fresh** key, because the previous owner may hold the old one. The proof (purpose `aaf-agent-transfer`, bound to the offer) is signed with the new key.
 3. **Effect.** The registration's epoch, and so the chain version of the agent and every local descendant, increments. Custody history records both periods. The agent's key is replaced.
-   - Every PPID issued under the old version becomes `TRANSFERRED`; new presentations get new PPIDs.
+   - Every ID issued under the old version becomes `TRANSFERRED`; new presentations get new IDs.
    - With `subtree: "move"`, descendants stay attached under the new principal. They fetch fresh receipts and need fresh delegations. With `subtree: "end"`, they are revoked (`parent_transferred`).
    - Sub-agents registered with peer registries are ended either way; the new owner re-attaches them.
    - Peer registries are notified; both principals are notified.
@@ -394,29 +479,51 @@ A transfer is a new principal–agent relationship. The old principal remains an
 
 ### 7.10 Incidents
 
-`POST /v1/incidents {ppid, sealed_ref?, reporter, summary, evidence}`, signed by the RP. The registry notifies the principal accountable for that PPID and, if the agent has since changed hands, the current principal too. It returns the provider's incident-response contact. If the root is registered with a peer, the report is relayed there. The reporter never learns who the principal is.
+`POST /v1/incidents {ppid, sealed_ref?, reporter, summary, evidence}`, signed by the RP. The registry notifies the principal accountable for that ID and, if the agent has since changed hands, the current principal too. It returns the provider's incident-response contact. If the root is registered with a peer, the report is relayed there. The reporter never learns who the principal is.
 
-### 7.11 Resolution under legal process
+### 7.11 Legal orders: resolution and revocation
 
-A legal order (`aaf-legal-order+jwt`) from a trusted authority names `{case, ppids, relying_party, requester, scope, notify_principal, purpose}`. `POST /v1/resolutions {order, ppid, sealed_ref?, forward?}`:
+The paper calls this attribution through identity escrow (ES-1): the registry holds the link from an ID to its principal and releases it only under an established process. In this profile the process is a legal order (`aaf-legal-order+jwt`) from a recognized authority, naming `{case, ppids, relying_party, requester, scope, notify_principal, purpose}`.
 
-1. Verify the order and that it covers the PPID.
-2. Locate the registration, chain version and **the root principal recorded at issuance** (sealed reference for ephemeral PPIDs).
+**Resolution.** `POST /v1/resolutions {order, ppid, sealed_ref?, forward?}`:
+
+1. Verify the order and that it covers the ID.
+2. Locate the registration, chain version and **the root principal recorded at issuance** (sealed reference for single-use IDs).
 3. Walk the chain. If its top is a remote parent, forward to the peer with a registry-signed `aaf-resolution-forward+jwt`.
-4. Return the accountable principal (identity, contact, IDA verification), the PPID's status (for example `transferred`), the current principal if different, the chain with custody history, and (if in scope) related PPIDs at the order's relying party under the same accountable principal.
+4. Return the accountable principal (identity, contact, IDA verification), the ID's status (for example `transferred`), the current principal if different, the chain with custody history, and (if in scope) related PPIDs at the order's relying party under the same accountable principal.
 5. Log `resolution.performed`; notify the principal unless the order forbids it.
+
+**Revocation.** `POST /v1/revocations {order, ppid, sealed_ref?}`. The order MUST name the ID and carry the scope `revoke_registration`; an order that only authorizes resolution is refused (`403 not_in_scope`). The registry revokes the registration behind the ID with reason `legal_order`, which cascades to its sub-agents, records the authority and case in its log, and notifies the principal unless the order forbids it. If the agent has changed hands since the ID was issued, the relationship the ID names has already ended and the request is refused (`409 custody_changed`): the order would otherwise fall on a different principal.
+
+**Profile choice:** a legal order is the only route to resolution. The paper also allows release with the principal's consent, for example in dispute resolution; here a principal consents in advance by naming RPs in its disclosure policy (§7.3).
 
 ### 7.12 Federation
 
-| Requirement (paper §3.1) | How it is met |
+| Property | How it is met |
 |---|---|
-| PPIDs embed the issuing registry | PPID host component |
-| A PPID resolves to a root principal across registries | `remote_agent` links recorded by the parent's PPID at the child's registry; resolution forwarding |
+| IDs name the issuing registry | the ID's host component |
+| An ID resolves to a root principal across registries | `remote_agent` links recorded by the parent's PPID at the child's registry (the parent discloses its chain summary to that registry and nothing else); resolution forwarding |
 | Status is consistent across registries | Child status depends on the peer's status for the parent. On revocation or transfer the parent's registry **pushes** `POST /v1/federation/status-changed {ppids}` (signed `keyid="registry:<entity>"`) to every peer it issued a PPID to. Pull with a bounded cache is the backstop. |
 
 ### 7.13 Transparency log
 
-Every state change is a log entry: principal enrollment, verification, attributes, disclosure; registration created, revoked, transferred, key rotated; transfer offered or cancelled; PPID issued; accreditation granted or withdrawn; incident; notification; resolution. The public view shows only `{index, type, at, leaf_hash}`. STHs and consistency proofs are public.
+Every state change is a log entry: principal enrollment, verification, attributes, disclosure, closure; registration created, revoked, transferred, key rotated; transfer offered or cancelled; PPID issued; accreditation granted or withdrawn; incident; notification; resolution. The public view shows only `{index, type, at, leaf_hash}`. STHs and consistency proofs are public.
+
+### 7.14 Published practices
+
+Each registry publishes what a principal or relying party needs to decide whether to rely on it (the paper's DR-1), as `practices` in its `aaf_registry` metadata and at `GET /v1/practices`:
+
+| Section | States |
+|---|---|
+| `identity_proofing` | the kinds of verified identity, the method, the recognized verifiers, the Sybil rule, what happens when a verification lapses |
+| `authentication` | how principals and agents authenticate |
+| `ids` | the two modes, how long a credential is valid, that every claim but the ID is optional |
+| `revocation` | who may revoke, that it cascades, the latency bound, how status is published |
+| `records` | what is held and not held, the retention period, that records survive revocation, the log |
+| `disclosure` | what RPs can learn, the attribution process and the recognized authorities, logging and notice, incident relay |
+| `signing_keys`, `security` | how keys are held; the operating standard |
+
+The statement is generated from the running service's configuration, so it cannot drift from what the code does (DR-2). Relying parties use it, with the claims in each credential, to set their own acceptance criteria (§10.3).
 
 ---
 
@@ -468,7 +575,7 @@ The keeper checks the client assertion against the grant's `agent_key`, then tha
 |---|---|---|
 | `vct`, `iss`, `aud`, `iat`, `exp`, `jti` | ✓ | `exp` ≤ grant `exp` and the actor token's `exp` |
 | `sub` | ✓ | the principal, as a per-token pseudonym (`urn:aaf:pseudonym:…`) |
-| `act` | ✓ | RFC 8693: `act.sub` = the acting agent's PPID; nested `act` = delegating agents, as per-token pseudonyms. Depth shows delegation without identifying anyone. |
+| `act` | ✓ | RFC 8693: `act.sub` = the acting agent's ID; nested `act` = delegating agents, as per-token pseudonyms. Depth shows delegation without identifying anyone. An agent that presents its authority therefore shows how deep the delegation runs. |
 | `cnf` | ✓ | copied from the actor token: the same key, so the RP can check both credentials belong to one holder |
 | `authorization_details[]` | SD (each) | RFC 9396 entries; the agent reveals only those covering the request |
 | `prohibitions`, `delegation`, `granted_on`, `valid_until` | ✓ always | dates coarsened |
@@ -482,7 +589,7 @@ A grant can make a power conditional: `requires_approval: {role}` on an `authori
 
 1. **Registration.** `POST /v1/webauthn/registration-options` then `POST /v1/webauthn/register` (attestation `none`, user verification required). The keeper records the credential.
 2. **Designation.** The principal's role designation names the person by that credential: `grantee: {kind: "person", passkey: <credential id>, role}`. The keeper refuses designations naming unknown passkeys.
-3. **Approval request.** `POST /v1/approvals/options {designation_id, ppid, action, subject_digest}`. The keeper checks that the designation is active, that it issued an authorization credential for this PPID, and that the designee and the agent answer to the same principal. It then returns WebAuthn request options whose `challenge` = SHA-256(JCS({purpose, details, nonce})). The challenge therefore commits to the agent, action and document. Ceremonies are single-use and expire after 5 minutes.
+3. **Approval request.** `POST /v1/approvals/options {designation_id, ppid, action, subject_digest}`. The keeper checks that the designation is active, that it issued an authorization credential for this ID, and that the designee and the agent answer to the same principal. It then returns WebAuthn request options whose `challenge` = SHA-256(JCS({purpose, details, nonce})). The challenge therefore commits to the agent, action and document. Ceremonies are single-use and expire after 5 minutes.
 4. **Approval.** `POST /v1/approvals {request_id, credential}`. The keeper verifies the assertion: `webauthn.get`, challenge, origin, `rpIdHash`, the UP and UV flags, the signature with the designee's public key, and the counter. Only then does it issue an approval SD-JWT VC `{vct …/approval/1, sub: ppid, role, action, subject_digest, approver_ref, approval_method: {type: "webauthn", user_verified: true}, status, exp}`.
 
 RPs MUST reject approvals whose `approval_method` is not a user-verified passkey. An approval is valid only for that agent, action and document, and only while the designation is in force.
@@ -493,7 +600,7 @@ The provider signs `{provider, bom: <CycloneDX 1.6 document>, iat}`. The BOM's `
 
 ### 8.6 Activity logs
 
-Entries (`aaf-activity+jwt`): `{subject: <ppid>, txn, writer_role: "agent" | "relying_party", writer, event, details, at}`, signed by the agent's presentation key or the RP's key. Read access is limited to parties that wrote to that subject's log, and to holders of a legal order (optionally widened by a registry resolution listing related PPIDs).
+Entries (`aaf-activity+jwt`): `{subject: <ppid>, txn, writer_role: "agent" | "relying_party", writer, event, details, at}`, signed by the agent's presentation key or the RP's key. Read access is limited to parties that wrote to that subject's log, and to holders of a legal order (optionally widened by a registry resolution listing related PPIDs). An agent discloses its activity-log pointer by default so both sides can write to the log; it can withhold it.
 
 ### 8.7 Status
 
@@ -505,7 +612,7 @@ Entries (`aaf-activity+jwt`): `{subject: <ppid>, txn, writer_role: "agent" | "re
 
 ### 9.1 Relying-party metadata
 
-`GET /.well-known/aaf-relying-party` → `{id, name, jwks, accepted_registries, requests: {identity?, attributes?, provenance?}, actions}`. `id` is the audience agents address.
+`GET /.well-known/aaf-relying-party` → `{id, name, jwks, accepted_registries, requests, actions}`. `id` is the audience agents address. `accepted_registries` lists the registries whose IDs this RP accepts: all of the federation's by default, or the RP's own choice. `requests` names what the RP asks to see on every action: any of `identity`, `attributes: [names]`, `provenance`, `principal_type`, `assurance`, `verification_source`, `chain_length`, `principal_directory`. `actions` publishes each action's policy tiers, from which an agent can tell what else that action needs (§10.3). This is the paper's presentation request (PR-10): the RP asks the agent, never the registry or the principal.
 
 ### 9.2 Request
 
@@ -526,11 +633,11 @@ Both KB-JWTs use `aud` = the RP's id and `nonce` = the signature's `nonce`. This
 
 ### 9.3 Agent obligations
 
-An agent MUST use a presentation key that differs from its long-term key: one per audience in pairwise mode, one per presentation in ephemeral mode. It MUST present credentials issued for the RP's `id`, and by default reveal only the activity and authorization record pointers and the `authorization_details` matching the request. It reveals identity claims, attributes or provenance only when the RP asks *and* the principal's policy made them available. It MUST log its own account of each action.
+An agent MUST use a presentation key that differs from its long-term key: one per audience in pairwise mode, one per presentation in ephemeral mode. It MUST present credentials issued for the RP's `id`, and by default reveal only the ID, the activity-log pointer and the `authorization_details` matching the request. It reveals claims about the principal or the chain, identity claims, attributes or provenance only when the RP asks, and identity claims and attributes only if the principal's policy made them available. It MUST log its own account of each action.
 
 ### 9.4 Responses
 
-`200` (allow) or `403` with `{txn, decision, reasons, tier, classification, result}`. `decision` ∈ `allow | deny | step_up | deferred`.
+`200` (allow) or `403` with `{txn, decision, reasons, tier, classification, result, missing_claims?}`. `decision` ∈ `allow | deny | step_up | deferred`. With `step_up`, `missing_claims` names what the agent should add to its next presentation.
 
 ---
 
@@ -539,44 +646,60 @@ An agent MUST use a presentation key that differs from its long-term key: one pe
 ### 10.1 Verification algorithm
 
 0. **Nothing presented** → `UNLABELED`. A bare `AAF-Claim` header → `UNSUPPORTED`.
-1. **Accountability credential**: issuer is a federation registry (§6.1); SD-JWT VC signature valid; `vct` = accountability; `aud` = RP; unexpired. Failure → `UNSUPPORTED`.
+1. **Accountability credential**: issuer is a federation registry (§6.1) that this RP accepts (§9.1); SD-JWT VC signature valid; `vct` = accountability; `aud` = RP; unexpired; `accountability.status` = `accountable`. Failure → `UNSUPPORTED`. Nothing else in the credential is required.
 2. **Holder**: RFC 9421 signature valid with `keyid` = the credential's `cnf` thumbprint, covering the required components; fresh; nonce unseen. The `keyid` only selects the key: the key that verifies the signature MUST be the `cnf` key, so a self-presented `jkt:` key is never accepted here. KB-JWT valid with `aud` = RP and `nonce` = signature nonce. Failure → `UNSUPPORTED` (intercepted or replayed credentials).
 3. **Status**: fetch the registry's status list (fresh when the policy tier requires live status, otherwise within `ttl`). `INVALID`, `SUSPENDED` or `TRANSFERRED` → `REVOKED`. List unavailable → `LOOKUP_FAILED`.
-4. **Authorization credential**: issuer is a federation record keeper holding the issuing registry's trust mark for `authorization` (§6.4); SD-JWT VC + KB-JWT valid; `vct` = authorization; `act.sub` = the PPID; same `cnf`; `aud` = RP; unexpired; status list `VALID`.
-5. **Approval** (if carried): keeper accredited; `vct` = approval; `sub` = PPID; `action` and `subject_digest` match; unexpired; status list `VALID`.
+4. **Authorization credential**: issuer is a federation record keeper holding the issuing registry's trust mark for `authorization` (§6.4); SD-JWT VC + KB-JWT valid; `vct` = authorization; `act.sub` = the ID; same `cnf`; `aud` = RP; unexpired; status list `VALID`.
+5. **Approval** (if carried): keeper accredited; `vct` = approval; `sub` = the ID; `action` and `subject_digest` match; unexpired; status list `VALID`.
 6. **Authority**: evaluate the request against the disclosed `authorization_details` and the always-visible prohibitions (§11.2).
 
 Otherwise the classification is `ACCOUNTABLE_DISCLOSED` if `legal_name` was disclosed, else `ACCOUNTABLE_PROTECTED`.
 
+Every step uses only the presentation and what registries and record keepers publish for everyone: federation metadata and keys, status lists, trust marks. The RP never asks a registry about a particular ID (the paper's PR-9).
+
 ### 10.2 Classifications
 
-| Classification | Meaning | Paper |
-|---|---|---|
-| `ACCOUNTABLE_DISCLOSED` | verified legal person stands behind the agent; identity disclosed by consent | §5.2 |
-| `ACCOUNTABLE_PROTECTED` | verified legal person stands behind the agent; identity protected but resolvable | §5.2 |
-| `UNSUPPORTED` | a claim was made but could not be established | §5.5 |
-| `UNLABELED` | nothing was presented | §5.4 |
-| `REVOKED` | established, but no longer active (revoked, expired, suspended, transferred) | §3.2 |
-| `LOOKUP_FAILED` | could not be checked; **not** evidence that no principal exists | §5.4–5.5 |
-| `HUMAN_APPROVED` | no agent credentials, but the account holder approved this exact request with a passkey (services with accounts only, §10.5) | §5.4 |
+| Classification | Meaning |
+|---|---|
+| `ACCOUNTABLE_DISCLOSED` | a verified principal stands behind the agent; identity disclosed by consent |
+| `ACCOUNTABLE_PROTECTED` | a verified principal stands behind the agent; identity protected but recoverable by the registry |
+| `UNSUPPORTED` | a claim was made but could not be established (self-asserted, from an unaccepted issuer, or presented without the holder's key) |
+| `UNLABELED` | nothing was presented |
+| `REVOKED` | established, but no longer active (revoked, expired, suspended, transferred) |
+| `LOOKUP_FAILED` | status could not be checked; **not** evidence that no principal exists |
+| `HUMAN_APPROVED` | no agent credentials, but the account holder approved this exact request with a passkey (services with accounts only, §10.5) |
+
+The paper's conclusion asks a pilot to cover disclosed and protected principals, unsupported claims and revoked credentials; Scenario 4 runs all of them. Keeping `UNLABELED` and `LOOKUP_FAILED` apart from the rest is this profile's addition: an RP should not read either as proof that no principal exists.
 
 ### 10.3 Policy tiers and decisions
 
-Per action, ordered tiers `{label, when?, require: {accountability: 'none'|'established'|'disclosed'|'agent_or_human', liveStatus?, authorization?, attributes?, provenance?, account?: 'owner', humanApproval?}}`:
+What an agent must show is set by the context (the paper's "Proportionate"). Per action, ordered tiers `{label, when?, require}`, where `require` may hold:
+
+| Member | Meaning |
+|---|---|
+| `accountability` | `none`, `established` (a valid ID), `disclosed` (identity shown), or `agent_or_human` (§10.5) |
+| `principalType`, `assurance`, `trustFramework`, `maxChainLength` | acceptance criteria: the kinds of principal, assurance levels and proofing frameworks the RP accepts, and how long a chain may be. A bank might require a legal or natural person proofed to a stated level; another service might accept any valid ID |
+| `authorization`, `attributes`, `provenance` | authority covering the action; named verified attributes; the bill of materials |
+| `liveStatus` | fetch a fresh status list (default) or accept a cached one |
+| `account: 'owner'`, `humanApproval` | passkey rules for services with accounts (§10.5) |
+
+Because claims about the principal and the chain are optional (§7.6), a tier that needs one asks for it and judges it only once it is shown:
 
 | Situation | Decision |
 |---|---|
 | `UNLABELED` / `UNSUPPORTED` and accountability required | `deny` (open tiers allow) |
 | `REVOKED` | `deny` |
-| `LOOKUP_FAILED` and accountability required | **`deferred`** (paper §5.4) |
+| `LOOKUP_FAILED` and accountability required | **`deferred`** |
 | `ACCOUNTABLE_PROTECTED` and the tier requires `disclosed` | `step_up` |
+| a claim an acceptance criterion needs was not shown | `step_up`, naming it in `missing_claims` |
+| a shown claim does not meet the criterion | `deny` with reasons |
 | required attribute or provenance missing | `step_up` |
 | authorization missing, invalid or not covering the action | `deny` with reasons |
 | otherwise | `allow` |
 
 ### 10.4 Evidence retention
 
-For every decision the RP keeps: transaction id, time, action and parameters, decision and reasons, classification, PPID and mode, issuing registry, `sealed_ref` (ephemeral), root summary, chain length, disclosed identity and attributes, authority relied on, approval, the **status list tokens** it checked, a presentation digest, each verification check, and its activity-log receipt. It also writes a signed `decision` entry to the agent's activity log at an accredited keeper. Under the Bank Secrecy Act this record supports a SAR filing (paper §4, Scenario 1).
+For every decision the RP keeps: transaction id, time, action and parameters, decision and reasons, classification, the ID and its mode, issuing registry, `sealed_ref` (single-use IDs), whatever claims about the principal and chain were disclosed, disclosed identity and attributes, authority relied on, approval, the **status list tokens** it checked, a presentation digest, each verification check, and its activity-log receipt. It also writes a signed `decision` entry to the agent's activity log at an accredited keeper. Under the Bank Secrecy Act this record supports a SAR filing (Scenario 1).
 
 ### 10.5 Passkeys at services: the human path, agent-bound access, step-up
 
@@ -585,7 +708,7 @@ A service with its own accounts uses passkeys in three ways. The first two answe
 | Use | When | Rule |
 |---|---|---|
 | **Human path** (`accountability: 'agent_or_human'`) | a request names an account and carries **no** agent credentials | honored only with a passkey approval by the account holder of *this exact request* (account, action, parameters), passed as `AAF-Human-Approval: <request id>`; classification `HUMAN_APPROVED`. A bearer token alone is refused. |
-| **Agent-bound access** (`account: 'owner'`) | an accountable agent acts on an account | the agent's PPID at the service must hold a delegation the account holder approved with a passkey. The first request opens an approval request; the holder sees who stands behind the agent (type, assurance, verifier, chain; identity only if disclosed) and approves or declines. |
+| **Agent-bound access** (`account: 'owner'`) | an accountable agent acts on an account | the agent's PPID at the service must hold a delegation the account holder approved with a passkey. The first request opens an approval request; the holder sees what the service asked the agent to show about who stands behind it (kind of principal, assurance, verifier, chain; identity only if disclosed) and approves or declines. |
 | **Step-up** (`humanApproval: true`) | sensitive actions, even by authorized agents | each action needs a passkey approval of that exact action and parameters (`AAF-Approval-Ref: <request id>`), usable once. |
 
 **Stolen tokens.** In passkey mode a bearer API token identifies an account but carries no authority. An agent that presents an account's token without the holder's authorization is refused. Such a presentation is itself evidence of credential theft, so the service SHOULD file an incident (§7.10) at once. The agent's principal is then notified on the first attempt (Scenario 3, branch C).
@@ -627,7 +750,7 @@ A delegating agent SHOULD choose the child's expiry so that this holds. With no 
 
 ### 12.1 Unlinkability across relying parties
 
-The simulator tests this directly (Scenario 1, step 8, and Scenario 7 across a transfer). It pools everything two RPs received (credentials, disclosures, KB-JWTs, signature `keyid`s, nonces and signatures) and finds no shared value of 16 or more characters and no shared timestamp, apart from public constants such as issuer keys, `vct`s and status-list URIs. The mechanisms are: pairwise or ephemeral PPIDs; per-audience or per-presentation keys; fresh salts; per-PPID `reg_binding`; token exchange (the RP never sees the principal's signature); per-token pseudonyms in `sub` and `act`; random status-list indices; coarsened long-lived times; and per-build provenance records.
+The simulator tests this directly (Scenario 1, step 8, and Scenario 7 across a transfer). It pools everything two RPs received (credentials, disclosures, KB-JWTs, signature `keyid`s, nonces and signatures) and finds no shared value of 16 or more characters and no shared timestamp, apart from public constants such as issuer keys, `vct`s and status-list URIs. The mechanisms are: pairwise or single-use IDs; per-audience or per-presentation keys; fresh salts and decoy digests; a `reg_binding` that differs for every ID; token exchange (the RP never sees the principal's signature); per-token pseudonyms in `sub` and `act`; random status-list indices; coarsened long-lived times; and per-build provenance records.
 
 ### 12.2 Status privacy
 
@@ -636,10 +759,11 @@ Status lists are fetched whole, so the registry and record keepers do not learn 
 ### 12.3 Residual linkability (out of scope, noted)
 
 - **Timing and network:** per-presentation `iat`, IP addresses, TLS fingerprints.
-- **Structural leakage:** the number of SD digests, and `identity: disclosable`. SD-JWT decoy digests SHOULD be added.
+- **Structural leakage:** decoy digests fix the number of digests in the accountability credential (§7.6), but not in the authorization credential, where the count of `authorization_details` entries is visible.
+- **What is disclosed:** claims an RP asks for narrow the set of principals an agent could belong to. A verifier's name and a verification month identify fewer principals than an assurance level does; RPs SHOULD ask for the least that their decision needs.
 - **Content of disclosures:** for example a free-text `purpose` shown to two RPs.
 - **Behavior.**
-- **Trusted parties:** the registry can link pairwise PPIDs (by design) and could link ephemeral issuance to use; the authorization RK sees which audiences a grant was exchanged for.
+- **Trusted parties:** the registry issues each credential for a named RP, so it learns which RPs an agent deals with and roughly when, and could link a single-use ID's issuance to its use; the authorization RK sees which audiences a grant was exchanged for. Neither sees requests, disclosed claims or outcomes. The paper's design goal of minimal directory knowledge is met for status checks (§12.2) but not for issuance (§16).
 
 ### 12.4 Identity disclosure
 
@@ -653,14 +777,16 @@ Identity reaches an RP only by consent, or reaches an authority by legal order. 
 |---|---|---|
 | Stolen credential replayed | RFC 9421 signature and KB-JWT by the `cnf` key, bound to method, URL, body, presentation, audience and nonce | key theft; hence revocation |
 | Stolen agent keys | revocation; the registry refuses new credentials; status lists reject cached ones; TTL bounds RPs that skip status | window ≤ TTL for RPs skipping status |
-| Previous owner keeps keys after a transfer | acceptance requires a fresh agent key; old PPIDs `TRANSFERRED`; old grants unbindable and superseded; stale receipts refused; `rotate-key` for moved sub-agents | sub-agents moved without rotation keep their keys until rotated |
+| Previous owner keeps keys after a transfer | acceptance requires a fresh agent key, proven by the new holder; old IDs `TRANSFERRED`; old grants unbindable and superseded; stale receipts refused; `rotate-key` for moved sub-agents | sub-agents moved without rotation keep their keys until rotated |
 | Mix-and-match of credentials | `reg_binding` (with version) checked at exchange; `act.sub` and `cnf` must match at the RP | — |
 | Hiding limitations | prohibitions and constraints never selectively disclosable | — |
 | Obsolete authority | expiry; status lists; approvals tied to designations | RPs using cached lists: bounded by `ttl` |
 | Over-delegation; runaway lineages | attenuation at deposit; depth budgets; federation max depth; ephemeral expiry | — |
-| Self-asserted or rogue-registry claims | OpenID Federation trust chain to the trust anchor; classified `UNSUPPORTED` | — |
+| Self-asserted or rogue-registry claims | OpenID Federation trust chain to the trust anchor; the RP's own list of accepted registries; classified `UNSUPPORTED` | — |
 | Unaccredited or de-accredited record keeper | live trust-mark check; trust anchor's `trust_mark_issuers` | ≤ 60 s RP cache |
-| Rogue agents | authority enforced by resource holders; incident relay; revocation | does not prevent the compromise (paper §5.3) |
+| Rogue agents (paper §3.3) | authority enforced by resource holders; incident relay; revocation by the principal, the registry or a legal order, which ends every ID and sub-agent at once | does not prevent the compromise |
+| A principal registers a key no agent of its holds, or someone else's | the agent's proof of possession, bound to the registrant (§7.4) | — |
+| One identity enrolling many principals to evade revocation or limits | one principal record per verified identity (§7.2) | only as strong as the identity key; not checked across registries |
 | Malicious principals; sham sponsorship | verified identity on record; resolution; liability hook | depends on law reaching the sponsor |
 | Malicious provider | signed, content-addressed CycloneDX | claims rest on the provider's word |
 | Compromised record keeper | receipts, inclusion and consistency proofs; writers' signatures; registry unaffected (Scenario 6) | withholding data |
@@ -675,21 +801,26 @@ Identity reaches an RP only by consent, or reaches an authority by legal order. 
 
 ## 14. Conformance
 
-An implementation claims the classes it implements. The simulator's expectations are an executable test suite for this profile (`npm test`).
+An implementation claims the classes it implements. The simulator's expectations and the tests are an executable test suite for this profile (`npm test`). Each point names the paper requirement it carries out; points with none are this profile's extensions (§3.2).
 
 ### 14.1 Registry
 
 A conforming registry MUST:
 
-- **R1** register agents only into chains ending in a principal verified by a federation verifier, and record the chain;
-- **R2** issue PPIDs that embed its identity, name exactly one principal–agent relationship (new on transfer), and cannot be correlated across RPs by anything presented;
-- **R3** resolve PPIDs to the principal accountable at the time, only under consent or a valid legal order, and log every resolution;
-- **R4** publish machine-readable status computed along the whole chain (including expiry and peers), and propagate revocation within a published interval;
-- **R5** retain history after revocation, expiry or transfer;
+- **R1** register agents only into chains ending in a principal verified by a federation verifier, and record the chain (PV-1, AG-2, AG-3);
+- **R2** issue IDs that name it, carry exactly one principal–agent relationship (new on transfer), and cannot be correlated across RPs by anything presented; mark PPIDs as such and issue at most one per agent and RP (PR-1, PR-7, PR-8);
+- **R3** resolve IDs to the principal accountable at the time, only under consent or a valid legal order, and log every resolution (ES-1);
+- **R4** publish machine-readable status computed along the whole chain (including expiry and peers), and propagate revocation within a published interval (PR-3, RV-2);
+- **R5** retain records after revocation, expiry or transfer (RV-1, ES-1);
 - **R6** accredit record keepers by withdrawable trust marks and point only to accredited keepers;
 - **R7** keep its state in an append-only, publicly checkable log;
 - **R8** relay incident reports without revealing the principal;
-- **R9** require both principals' signatures and a fresh agent key for a transfer, and enforce depth budgets and expiry along lineages.
+- **R9** require both principals' signatures and a fresh agent key for a transfer, and enforce depth budgets and expiry along lineages;
+- **R10** keep one principal record per verified identity (PV-3);
+- **R11** bind an agent's record to a key only on the agent's own proof of possession, at registration, key replacement and transfer (AG-2, AG-5);
+- **R12** make every claim but the ID selectively disclosable, and offer identity claims only to RPs the principal's policy names (PR-1, PR-5, PR-6);
+- **R13** revoke on a legal order that carries the revocation scope, and otherwise only as its published practices state (RV-1);
+- **R14** publish its practices and keep to them (DR-1, DR-2).
 
 ### 14.2 Record keeper
 
@@ -697,44 +828,49 @@ A conforming record keeper MUST:
 
 - **K1** accept only records signed by their source, verifying entitlement;
 - **K2** append every record to a Merkle log, return receipts, and serve proofs;
-- **K3** (authorization) enforce attenuation, cascading status and chain-version binding; issue only audience-bound, key-bound credentials that never hide limitations;
+- **K3** (authorization) enforce attenuation, cascading status and chain-version binding; issue only audience-bound, key-bound credentials that never hide limitations (AG-3, PR-4);
 - **K4** restrict read access to writers and holders of legal process.
 
 ### 14.3 Agent
 
 A conforming agent MUST:
 
-- **A1** present credentials issued for the RP, with key binding and a signed request, using a key used for no other RP;
-- **A2** disclose no more than the request and the principal's policy require;
-- **A3** log its own account of its actions.
+- **A1** present credentials issued for the RP, with key binding and a signed request, using a key used for no other RP (AG-1, PR-2);
+- **A2** disclose no more than the request and the principal's policy require (PR-5);
+- **A3** log its own account of its actions;
+- **A4** prove possession of its key to the registry when it is registered or its key is replaced (AG-2).
 
 ### 14.4 Relying party
 
 A conforming RP MUST:
 
-- **P1** verify against the federation (trust chain, trust marks) and check holder binding;
+- **P1** verify against the federation (trust chain, trust marks) and check holder binding, using only the presentation and published information, without asking a registry about any one ID (PR-2, PR-9);
 - **P2** distinguish the classifications of §10.2 and never treat `UNLABELED` or `LOOKUP_FAILED` as proof that no principal exists;
 - **P3** evaluate disclosed authority, including prohibitions, before acting;
 - **P4** retain the evidence in §10.4;
-- **P5** (services with accounts) SHOULD NOT accept bearer tokens as sufficient authority for agents, and SHOULD bind account access to passkey-approved accountable agents (§10.5).
+- **P5** (services with accounts) SHOULD NOT accept bearer tokens as sufficient authority for agents, and SHOULD bind account access to passkey-approved accountable agents (§10.5);
+- **P6** ask the agent, not the registry or the principal, for any further claim its policy needs, and judge a claim only once it is shown (PR-10).
 
 ### 14.5 Scenario coverage
 
 | Scenario | Conformance points exercised |
 |---|---|
-| 1 Payment | R1–R5, K1–K3, A1–A3, P1–P4 |
+| 1 Payment | R1–R5, R12, K1–K3, A1–A3, P1–P4, P6 (a bank's acceptance criteria) |
 | 2 Regulatory filing | K3 (passkey approvals), K4, P3, consent disclosure |
-| 3 Hugging Face replay | R3, R8, K4, P2, P5 (branch C: passkeys prevent the stolen-token attack) |
-| 4 Compute pilot | P2 (all six classes), R2 (ephemeral), R3 (sealed reference) |
-| 5 Federation | R2, R4 (cross-registry), K3 (attenuation), R8 |
+| 3 Hugging Face replay | R3, R8, R13 (revocation under a legal order), K4, P2, P5 (branch C: passkeys prevent the stolen-token attack) |
+| 4 Compute pilot | P2 (all six classes), R2 (single-use IDs), R3 (sealed reference) |
+| 5 Federation | R2, R4 (cross-registry), K3 (attenuation), R8, P6 (chain-length limit) |
 | 6 Audit | R7, K2, R6 |
-| 7 Lineages and transfer | R3 (accountability by time), R4 (cascade, expiry), R9, K3 (version binding) |
+| 7 Lineages and transfer | R3 (accountability by time), R4 (cascade, expiry), R9, R11, K3 (version binding) |
+| `test/paper-requirements.test.js` | R10–R14, A4, P1, P6 |
 
 ---
 
 ## 15. Reuse of existing specifications
 
-The goal was not to reinvent working wheels. This section accounts for every part.
+The goal was not to reinvent working wheels. §15.1 accounts for every part. §15.2 says which of the options in the paper's Appendix C this profile chose.
+
+### 15.1 Specifications reused
 
 | Part | Specification | How it is used | Profile-specific additions |
 |---|---|---|---|
@@ -751,9 +887,23 @@ The goal was not to reinvent working wheels. This section accounts for every par
 | Encryption, keys, signatures | RFC 7515–7518, 8037, 7638 | throughout | `typ` values for profile artifacts |
 | Canonical JSON | RFC 8785 | log leaves, digests | — |
 | Logs | RFC 9162 | Merkle trees, inclusion and consistency proofs | receipt and STH JSON |
-| **Agent → verified legal person chain; PPIDs and their resolution; lineages and transfer; legal orders; incident relay** | **none exists** | — | **the paper's contribution, specified in §§5, 7, 8.2** |
+| **The chain from an agent to a verified principal; IDs and their resolution under escrow; lineages and transfer; legal orders; incident relay** | **none exists** | — | **specified in §§5, 7, 8.2** |
 
-**Not adopted, deliberately:** IETF SCITT for logs (CBOR/COSE; recommended for production) and BBS or other blind credentials for ephemeral mode (needs a pairing-cryptography library). See §16.
+**Not adopted, deliberately:** IETF SCITT for logs (CBOR/COSE; recommended for production) and BBS or other blind credentials for single-use IDs (needs a pairing-cryptography library). See §16.
+
+### 15.2 Options chosen from the paper's Appendix C
+
+| Appendix C section | Option chosen here | Consequence |
+|---|---|---|
+| 1 Identity proofing | 2 and 3: human and legal-entity proofing, expressed with OpenID Identity Assurance `verified_claims` | no domain- or email-verified principals |
+| 2 Authentication | 1: proof of possession of a key (HTTP Message Signatures, SD-JWT key binding) | no hardware-held keys |
+| 3 IDs and unlinkable presentations | 1: on-demand issuance, as SD-JWT VCs with selective disclosure by salted hash | the registry learns each credential's RP and time; unlinkable to RPs, not to the registry |
+| 4 Authorizations | between 1 and 2: the principal signs a standing grant; an accredited record keeper attests it per RP by token exchange | the record keeper, not the registry, learns the RP; the RP never sees the principal's signature; revoked by the principal |
+| 5 Validity and revocation | 1 and 3: short-lived credentials plus a published Token Status List | no per-ID queries; each single-use ID has its own list position |
+| 6 Identity escrow | 1 for PPIDs (a map kept by the registry); 2 for single-use IDs (a pointer only the registry can decrypt) | the registry alone can recover identities; no multi-party control |
+| 7 Agent PPIDs | 1: derived by the registry from the agent record and the RP's name | the registry learns the RP; no group or principal PPIDs |
+| 8 Directory key management | none of the options | keys in files, no hierarchy, no scheduled retirement |
+| 9 Arrangements among directories | 1: a trust list (OpenID Federation 1.0) | one trust anchor; no cross-directory duplicate check or audits |
 
 ---
 
@@ -763,19 +913,24 @@ The goal was not to reinvent working wheels. This section accounts for every par
 
 **Design limits to revisit:**
 
-1. **Blind issuance (BBS).** Ephemeral mode stops RPs, but not the registry, from linking. Status lists already hide checks; issuance-unlinkability remains.
+1. **What the registry learns at issuance.** Each credential is issued on demand for a named RP, so the registry learns which RPs an agent deals with and when, and could link a single-use ID's issuance to its use. Status lists already hide checks. Batch issuance of single-use IDs, or anonymous credentials such as BBS, would hide the rest (the paper's Appendix C §3, options 2 and 3; §7, option 2).
 2. **SCITT.** Logs use RFC 9162 trees with JSON receipts. A production profile should use SCITT signed statements and COSE receipts, with log witnesses.
-3. **OpenID Federation depth.** One trust anchor and one level of subordinates. Intermediate authorities, metadata policies and trust-mark status endpoints are not implemented. The trust anchor's own statements are not yet rolled over.
+3. **One trust anchor.** The paper has principals and counterparties each choosing which directories to trust. Here an RP can restrict which registries it accepts, but every party is configured with a single trust anchor, and credential and trust-mark types are named after it. There is one level of subordinates. Intermediate authorities, metadata policies and trust-mark status endpoints are not implemented. The trust anchor's own statements are not yet rolled over.
 4. **Web Bot Auth key directories.** Agent signing keys come from the presented credential, not a published directory. That is right for unlinkability, but a profile of Web Bot Auth should say so.
 5. **KB-JWT nonce.** It is agent-generated (with replay caches), not issued by the RP. An RP nonce endpoint would strengthen freshness at the cost of a round trip.
 6. **Registry integrity.** Resolution relies on the registry's honesty. This needs audits, witnesses, and possibly threshold resolution keys.
 7. **Bidirectional verification.** The protocol can run in reverse, with the merchant's agent presenting to the consumer's agent, but a mutual handshake is not defined.
-8. **Agents posing as humans.** Services with accounts now have a passkey human path (§10.5). Services without accounts (anonymous browsing) would need anonymous signals instead: Privacy Pass tokens or personhood credentials (arXiv:2408.07892). These are stronger and more accessible than writing tests or AI-text detection.
+8. **Clients that do not say they are agents.** Services with accounts now have a passkey human path (§10.5). Services without accounts (anonymous browsing) would need anonymous signals instead: Privacy Pass tokens or personhood credentials (arXiv:2408.07892). These are stronger and more accessible than writing tests or AI-text detection.
 9. **Cross-registry transfer** and transfer of a sub-agent out of its lineage are not supported. Moved sub-agents keep their keys unless rotated.
 10. **Retention and deletion** (`recordRetentionYears`) are declared but not enforced.
-11. **Passkeys in the simulator** come from a software authenticator that produces the browser's wire format but sets "user verified" without a person. The browser demo (`npm run demo`) uses real passkeys. Attestation is not required, and account passkey registration in the demo is open while an account has none (a real service would require a signed-in session).
+11. **Optional requirements not implemented:** Sybil resistance across directories (PV-4), agents with several principals (AG-4), principal PPIDs and PPIDs shared by a group of RPs (PR-8), multi-party control of escrow (ES-2), conformity assessment (DR-3). Release of identity on the principal's consent for one dispute is also not implemented; consent is given in advance by policy (§7.3).
+12. **Kinds of verified identity.** Only natural and legal persons. The paper also describes lower-barrier identities (a domain, an email address) so that verification need not exclude people; this profile does not show them.
+13. **The identity key** (§7.2) is weak for natural persons: two people with the same name, jurisdiction and date of birth would collide, and a person can vary their name. It shows where the rule sits, not how a registry should compute it.
+14. **Withdrawing one attribute.** A registry cannot withdraw a single attested attribute before it expires; a verifier can only replace it. RV-1 expects single claims to be revocable.
+15. **Legal orders are not authenticated as requests.** Anyone holding a valid order can submit it. Orders have an expiry but are not single-use or bound to a registry.
+16. **Passkeys in the simulator** come from a software authenticator that produces the browser's wire format but sets "user verified" without a person. The browser demo (`npm run demo`) uses real passkeys. Attestation is not required, and account passkey registration in the demo is open while an account has none (a real service would require a signed-in session).
 
-**Questions for the authors.** Who operates registries and the trust anchor? What assurance levels should sectors require? How long should records be kept, and by whom? Should a transfer's buyer inherit any obligations for pre-transfer conduct? How can costs stay proportionate for individuals and small firms (paper §5.4)?
+**Questions for the authors.** Who operates registries and the trust anchor? What assurance levels should sectors require? How long should records be kept, and by whom? Should a transfer's buyer inherit any obligations for pre-transfer conduct? How can costs stay proportionate for individuals and small firms (paper §3.5)? Should a registry be able to compute a PPID that is the same for all of one principal's agents at an RP, so the RP can limit use per principal?
 
 ---
 
@@ -801,17 +956,19 @@ The goal was not to reinvent working wheels. This section accounts for every par
 | `POST /v1/principals/{id}/verification` · `/attributes` | `verifier:` | IDA `verified_claims` |
 | `PUT /v1/principals/{id}/disclosure-policy` | `principal:` | consent policy |
 | `POST /v1/principals/{id}/notifications` | `principal:` | incidents, resolutions, transfers |
-| `POST /v1/registrations` | `principal:` / `registration:` / `jkt:` (remote) | register (with `expires_in`, `lineage`) |
+| `POST /v1/registrations` | `principal:` / `registration:` / `jkt:` (remote) | register (with `agent_proof`, `expires_in`, `lineage`) |
 | `POST /v1/registrations/{id}/revoke` · `/receipt` · `/rotate-key` | chain above (receipt: also the agent) | revoke; current receipt; new agent key |
 | `POST /v1/registrations/{id}/transfer-offers` | `principal:` (direct principal) | offer a transfer |
 | `POST /v1/transfer-offers/{id}/accept` · `/cancel` | `principal:` (recipient / offerer) | accept (fresh key) / cancel |
 | `POST /v1/attestations` | `registration:` | accountability credential |
-| `POST /v1/status` | — | live status with reasons |
+| `POST /v1/status` | — | live status with reasons (peers and investigators; not for verifying presentations) |
 | `POST /v1/incidents` | `jkt:` (RP) or `registry:` (relay) | incident report |
 | `POST /v1/resolutions` | legal order (+ peer forward) | resolution |
+| `POST /v1/revocations` | legal order with `revoke_registration` scope | revocation under the order |
+| `GET /v1/practices` | — | published practices (§7.14) |
 | `POST /v1/federation/status-changed` | `registry:` | peer push |
 | `GET /v1/accreditations`, `/v1/transparency/{sth,entries,consistency}`, `/v1/stats`, `/` | — | operations, transparency, dashboard |
-| `POST /admin/accreditations` · `/admin/accreditations/{rk}/withdraw` · `/admin/registrations/{id}/revoke` | operator token | issue/withdraw trust marks; operator revocation |
+| `POST /admin/accreditations` · `/admin/accreditations/{rk}/withdraw` · `/admin/registrations/{id}/revoke` · `/admin/principals/{id}/close` | operator token | issue/withdraw trust marks; operator revocation; close a principal record |
 
 ### Record keeper
 
@@ -834,7 +991,7 @@ The goal was not to reinvent working wheels. This section accounts for every par
 
 | Method & path | Purpose |
 |---|---|
-| `GET /.well-known/aaf-relying-party` | audience id, requests, policy tiers, `webauthn` (if accounts) |
+| `GET /.well-known/aaf-relying-party` | audience id, accepted registries, requests, policy tiers, `webauthn` (if accounts) |
 | `POST /actions/{action}` | the transaction (§9.2); optional `AAF-Human-Approval` / `AAF-Approval-Ref` |
 | `POST /accounts/{a}/passkeys/options` · `/passkeys` · `GET /accounts/{a}/requests` · `POST /accounts/{a}/human-requests` | account holders' passkeys and pending approvals (§10.5) |
 | `POST /approval-requests/{id}/options` · `/approve` · `/decline` | passkey approval ceremonies |
@@ -854,6 +1011,7 @@ The goal was not to reinvent working wheels. This section accounts for every par
 | `status-list-token.registry.json`, `status-list-token.record-keeper.json` | §7.7, §8.7 |
 | `activity-receipt.json`, `relying-party-evidence-record.json`, `relying-party-response.json` | §4.5, §10.4, §9.4 |
 | `legal-order.json`, `resolution-result.json` | §7.11 |
+| `registry-practices.json`, `agent-key-proof.json` | §7.14, §7.4 |
 | `provenance-record.cyclonedx.json` | §8.5 |
 | `transfer.json` | §7.9 |
 | `webauthn.approval-ceremony.json`, `approval-credential.issued.json` | §8.4: options, decoded assertion (flags UP/UV), resulting approval credential |

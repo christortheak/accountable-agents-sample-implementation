@@ -1,4 +1,6 @@
-// Relying-party verification. Turns whatever an agent presented into:
+// Relying-party (the paper's "counterparty") verification, using only the
+// presentation and what directories publish: keys and status lists (PR-9).
+// Turns whatever an agent presented into:
 //   - an accountability classification (disclosed / protected / unsupported /
 //     unlabeled / revoked / lookup failed),
 //   - verified, disclosed authority evaluated against the requested action,
@@ -14,9 +16,13 @@ import { trustMarkType, TRUST_MARK_TYP } from '../lib/openid-federation.js';
 import { normalizeAttribute } from '../lib/ida.js';
 
 const peek = (jwt) => decodeJws(String(jwt).split('~')[0]);
+const IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration_number', 'lei'];
 const KB_MAX_AGE_SECONDS = 60;
 
-export function createVerifier({ rpId, trust }) {
+/**
+ * @param {string[]} [acceptedRegistries]  directories this counterparty accepts IDs from (default: every registry in the federation)
+ */
+export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
   const replay = new Map();
   const accreditationCache = new Map();
   const statusListCache = new Map();
@@ -111,6 +117,9 @@ export function createVerifier({ rpId, trust }) {
       if (!check('issued by a federation registry', Boolean(registry), payload.iss)) {
         return fail(C.UNSUPPORTED, `credential issuer ${payload.iss} is not a member of the federation`);
       }
+      if (acceptedRegistries && !check('directory accepted by this counterparty', acceptedRegistries.includes(registry.id), registry.id)) {
+        return fail(C.UNSUPPORTED, `this counterparty does not accept IDs from ${registry.id}`);
+      }
       out.registry = registry;
       registryKey = trust.signingKey(registry, header.kid);
       att = verifySdJwt(presentation.accountability, registryKey, { typ: SD_JWT_VC_TYP }).payload;
@@ -143,17 +152,32 @@ export function createVerifier({ rpId, trust }) {
       return fail(C.UNSUPPORTED, `presenter does not hold the credential's key (${err.code ?? err.message})`);
     }
 
+    // The ID alone is a valid presentation: the directory's signature says it
+    // resolves to a principal the directory verified. Everything else is
+    // whatever the agent chose to disclose.
+    const a = att.accountability ?? {};
     out.ppid = att.sub;
-    out.mode = att.ppid_mode;
+    out.mode = att.id_mode ?? att.ppid_mode ?? null;
     out.sealedRef = att.sealed_ref ?? null;
-    out.root = att.accountability.root_principal;
-    out.chainLength = att.accountability.chain_length;
-    out.attributes = (att.accountability.attributes ?? []).map(normalizeAttribute);
+    out.root = {
+      type: a.principal_type ?? null,
+      trust_framework: a.assurance?.trust_framework ?? null,
+      assurance_level: a.assurance?.assurance_level ?? null,
+      verifier: a.verification_source?.verifier ?? null,
+      verified_in: a.verification_source?.time ?? null,
+      directory: a.principal_directory ?? null,
+    };
+    out.chainLength = Number.isInteger(a.chain_length) ? a.chain_length : null;
+    out.attributes = (a.attributes ?? []).map(normalizeAttribute);
     out.records = att.records ?? [];
-    const disclosedIdentity = out.root.disclosed_identity ?? {};
+    const disclosedIdentity = Object.fromEntries(IDENTITY_CLAIMS.filter((c) => a[c] !== undefined).map((c) => [c, a[c]]));
     out.identity = Object.keys(disclosedIdentity).length ? disclosedIdentity : null;
-    const rv = out.root.verification ?? {};
-    check('chain ends in a verified legal person', out.root.verified === true, `${out.root.type}, ${rv.trust_framework} ${rv.assurance_level}, verified by ${rv.verifier}`);
+    const shown = [
+      out.root.type, out.root.assurance_level && `${out.root.trust_framework} ${out.root.assurance_level}`,
+      out.root.verifier && `verified by ${out.root.verifier}`, out.chainLength != null && `chain length ${out.chainLength}`,
+    ].filter(Boolean);
+    check('ID resolves to a principal the directory verified', a.status === 'accountable', shown.length ? `also shown: ${shown.join(', ')}` : 'nothing further disclosed');
+    if (a.status !== 'accountable') return fail(C.UNSUPPORTED, 'credential does not state an accountable principal');
 
     // 3. Status in the registry's Token Status List ("still valid?").
     let classification = out.identity?.legal_name ? C.DISCLOSED : C.PROTECTED;
@@ -203,7 +227,7 @@ export function createVerifier({ rpId, trust }) {
     }
     // RFC 8693 act: the acting party must be this agent; same holder key.
     const bound = az.act?.sub === att.sub && az.aud === rpId && thumbprint(az.cnf.jwk) === thumbprint(att.cnf.jwk);
-    if (!check('authorization bound to this agent (act.sub = PPID, same cnf key)', bound)) return { ...result, reason: 'authorization not bound to this presentation' };
+    if (!check('authorization bound to this agent (act.sub = the ID, same cnf key)', bound)) return { ...result, reason: 'authorization not bound to this presentation' };
     if (!check('authorization unexpired', az.exp > nowSeconds())) return { ...result, reason: 'authorization expired' };
     result.permissions = az.authorization_details ?? [];
     result.prohibitions = az.prohibitions ?? [];

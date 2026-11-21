@@ -1,4 +1,5 @@
-// Scenario 2 (paper §4, Scenario 2): regulatory filing, with a healthcare variant.
+// Scenario 2: regulatory filing, with a healthcare variant. Authorization and a
+// designated person's approval as claims a counterparty can ask for (PR-10).
 import { digestOf } from '../../lib/crypto.js';
 import { ServiceError } from '../../lib/http.js';
 import { short, payloadOf } from '../world.js';

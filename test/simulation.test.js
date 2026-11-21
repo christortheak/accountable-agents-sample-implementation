@@ -4,6 +4,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runSimulation } from '../src/sim/run.js';
 import { Agent } from '../src/actors/agent.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { startFederationInProcess } from '../src/lib/federation.js';
+import { getJson } from '../src/lib/http.js';
 
 test('all simulator scenarios meet their expectations', { timeout: 60000 }, async () => {
   const { ok, results } = await runSimulation({ fresh: true, quiet: true, reportFile: null });
@@ -31,5 +36,25 @@ test('lineage grandchild delegations survive a second boundary', { timeout: 6000
     assert.deepEqual([...delayed].sort(), ['Courier/sub', 'Fetcher']);
   } finally {
     Agent.prototype.delegate = original;
+  }
+});
+
+// The simulator can be run again and again against services that keep running
+// (`npm start`). Each directory keeps one principal record per verified
+// identity, so on a second run the characters' earlier records are closed (the
+// lost-key procedure) and they are verified afresh.
+test('the simulator can be rerun against the same running federation', { timeout: 120000 }, async () => {
+  const federation = await startFederationInProcess({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-test-')), portOffset: 5000 });
+  try {
+    for (const run of [1, 2]) {
+      const { ok, results } = await runSimulation({ federation, quiet: true, reportFile: null });
+      const failures = results.flatMap((r) => r.assertions.filter((a) => !a.ok).map((a) => `${r.title}: ${a.description}`));
+      assert.ok(ok, `run ${run}: unmet expectations:\n${failures.join('\n')}`);
+    }
+    // Two runs, but each character still has only one open record: verified principals did not double.
+    const stats = await getJson(`${federation.trustList.registry('https://registry-a.aaf.test').url}/v1/stats`);
+    assert.ok(stats.principals > stats.verified_principals, 'the first run\'s records were closed, not duplicated');
+  } finally {
+    await federation.close();
   }
 });

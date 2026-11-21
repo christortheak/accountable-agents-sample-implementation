@@ -3,13 +3,13 @@
 Everything runs on one machine with **Node.js 22 or later**. There are no dependencies to install.
 
 ```bash
-git clone https://github.com/christortheak/accountable-agents-framework.git && cd accountable-agents-framework
+git clone https://github.com/christortheak/accountable-agents-sample-implementation.git && cd accountable-agents-sample-implementation
 npm run sim
 ```
 
 ## Run in the browser instead (GitHub Codespaces)
 
-On [the repository's GitHub page](https://github.com/christortheak/accountable-agents-framework), choose **Code → Codespaces → Create codespace**. When the terminal opens, run `npm run sim` or `npm test`. Dashboards open through the **Ports** tab. Codespaces runs on your own GitHub account's free monthly allowance.
+On [the repository's GitHub page](https://github.com/christortheak/accountable-agents-sample-implementation), choose **Code → Codespaces → Create codespace**. When the terminal opens, run `npm run sim` or `npm test`. Dashboards open through the **Ports** tab. Codespaces runs on your own GitHub account's free monthly allowance.
 
 The passkey demo does not work in Codespaces, because passkeys are tied to the `localhost` domain the demo uses. Run that one on your own computer.
 
@@ -44,12 +44,13 @@ The summary at the end counts the assertions per scenario. `All expectations met
 npm test
 ```
 
-This runs 44 tests:
+This runs 51 tests:
 - **Unit tests** for the building blocks: JWS and JWE, SD-JWT with key binding, RFC 9162 Merkle proofs, RFC 8785 canonical JSON, RFC 9421 HTTP message signatures, the Token Status List (including invalid indices and values), RAR authority, and WebAuthn.
 - **Service tests:** state survives a restart, and requests are refused when they are unverified, replayed or signed with the wrong key.
 - **Relying-party key binding:** an agent's request must be signed with its credential's own key, and replays and substituted keys are refused.
 - **Trust-anchor pinning:** a pin constrains the key that actually signed, and newly advertised keys are not trusted.
 - **Delegation:** a delegated grant never outlives the grant it comes from.
+- **The paper's requirements** that have their own behavior here: one principal record per verified identity, agents proving they hold their key, the ID alone as a valid presentation, a relying party's acceptance criteria, revocation under a legal order, and published practices.
 - **Every simulator scenario**, run as an integration test.
 - **The passkey demo**, driven with a simulated passkey.
 - **The pilot kit:** the HTTPS fix, the `aaf` command-line tool end to end, and the standalone relying party.
@@ -132,4 +133,4 @@ Open **http://localhost:4300** in Chrome, Safari, Edge or Firefox. Use `localhos
 
 - **`EADDRINUSE` (port already in use):** another copy of the services is running. Stop it, or run with `--fresh`, which uses different ports.
 - **"trust anchor configuration not found":** run `npm run setup`, or let `npm start` / `npm run sim` do it.
-- **Odd failures after updating the code:** run `npm run reset`. Old state in `data/` may not match the new code.
+- **Odd failures after updating the code:** run `npm run reset`. Old state in `data/` may not match the new code. Profile 0.3 changed the format of IDs and credentials, so state from before it needs a reset.

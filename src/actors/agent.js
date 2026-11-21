@@ -9,6 +9,26 @@ import { detailMatches, toRar } from '../lib/scope.js';
 import { RP_METADATA_PATH } from '../lib/protocol.js';
 import { buildPresentationRequest } from '../lib/presentation.js';
 import { TYP as RK_TYP, TOKEN_EXCHANGE } from '../recordkeeper/recordkeeper.js';
+import { TYP as REGISTRY_TYP, AGENT_PROOF_PURPOSE } from '../registry/registry.js';
+
+const IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration_number', 'lei'];
+/** Optional claims about the principal and the chain; shown only on request. */
+const SUMMARY_CLAIMS = ['principal_type', 'assurance', 'verification_source', 'chain_length', 'principal_directory'];
+
+/**
+ * What a relying party asks for on one action: its standing requests, plus
+ * the claims that action's policy tiers say they need.
+ */
+export function requestsFor(meta, action) {
+  const req = { ...(meta.requests ?? {}) };
+  for (const tier of meta.actions?.[action] ?? []) {
+    const need = tier.require ?? {};
+    if (need.principalType) req.principal_type = true;
+    if (need.assurance || need.trustFramework) req.assurance = true;
+    if (need.maxChainLength != null) req.chain_length = true;
+  }
+  return req;
+}
 
 const REFRESH_MARGIN_SECONDS = 30;
 
@@ -58,6 +78,14 @@ export class Agent {
       }
     }
     return res;
+  }
+
+  /**
+   * Proof that this agent holds a key (AG-2): a statement signed with the key,
+   * for one directory, one purpose, and one registrant, registration or offer.
+   */
+  keyProof(registryId, purpose, binding, key = this.longTermKey) {
+    return signJws({ aud: registryId, purpose, binding, agent_key: key.kid, iat: nowSeconds() }, key, { typ: REGISTRY_TYP.agentProof });
   }
 
   /** A request to the agent's registry, signed (RFC 9421) with its long-term key. */
@@ -142,29 +170,36 @@ export class Agent {
 
   /**
    * Ask a relying party to perform an action.
-   * opts.disclose: { identity: bool, attributes: [names], provenance: bool, purpose: bool }
-   *   (defaults: reveal only what the relying party's metadata requests and the principal allowed)
+   * opts.disclose: { identity: bool, attributes: [names], provenance: bool, purpose: bool,
+   *                  principal_type, assurance, verification_source, chain_length, principal_directory: bool,
+   *                  activity_log: bool (default true: the pointer to the shared activity log) }
+   *   (defaults: the ID alone, plus only what the relying party asks for on this action and the principal allowed)
    * opts.approval: an approval credential to carry
    * opts.headers: extra headers, e.g. a service's passkey approval reference (aaf-approval-ref)
    */
   async act(rpUrl, action, params = {}, opts = {}) {
     const meta = await this.metadataFor(rpUrl);
     const ctx = await this.contextFor(meta.id, { mode: opts.mode ?? 'pairwise', grantId: opts.grantId });
-    const requested = meta.requests ?? {};
+    const requested = requestsFor(meta, action);
     const disclose = {
       identity: opts.disclose?.identity ?? Boolean(requested.identity),
       attributes: opts.disclose?.attributes ?? requested.attributes ?? [],
       provenance: opts.disclose?.provenance ?? Boolean(requested.provenance),
       purpose: opts.disclose?.purpose ?? false,
+      activity_log: opts.disclose?.activity_log ?? true,
     };
+    for (const c of SUMMARY_CLAIMS) disclose[c] = opts.disclose?.[c] ?? Boolean(requested[c]);
 
     const accountability = present(ctx.attestation, (d) => {
-      if (d.name && ['legal_name', 'jurisdiction', 'registration_number', 'lei'].includes(d.name)) return disclose.identity;
+      if (d.name && IDENTITY_CLAIMS.includes(d.name)) return disclose.identity;
+      if (d.name && SUMMARY_CLAIMS.includes(d.name)) return disclose[d.name];
       if (d.value && typeof d.value === 'object' && 'claims' in d.value && 'verification' in d.value) {
         return disclose.attributes.includes(Object.keys(d.value.claims)[0]);
       }
       if (d.value && typeof d.value === 'object' && 'role' in d.value && 'rk' in d.value) {
-        return d.value.role !== 'provenance' || disclose.provenance;
+        // Record pointers: where the shared activity log is (so both sides can write to it), and the bill of materials on request.
+        if (d.value.role === 'activity') return disclose.activity_log;
+        return d.value.role === 'provenance' && disclose.provenance;
       }
       return false;
     });
@@ -211,21 +246,28 @@ export class Agent {
   }
 
   // -------------------------------------------------------------------------
-  // Acting as a principal for sub-agents (the "authorizing agent" of Figure 0)
+  // Acting as a delegating agent: registering and authorizing sub-agents (AG-3)
   // -------------------------------------------------------------------------
 
   async registerSubagent(child, { registry = this.registry, label, records, provider = null, expiresIn = null, lineage = null }) {
     let res;
+    const agentJwk = publicOf(child.longTermKey.publicJwk);
     if (registry.id === this.registry.id) {
       res = await this.call(`${registry.url}/v1/registrations`, {
-        agent_jwk: publicOf(child.longTermKey.publicJwk), parent: { type: 'agent' }, records, provider, label, expires_in: expiresIn, lineage,
+        agent_jwk: agentJwk, agent_proof: child.keyProof(registry.id, AGENT_PROOF_PURPOSE.registration, `registration:${this.registrationId}`),
+        parent: { type: 'agent' }, records, provider, label, expires_in: expiresIn, lineage,
       });
     } else {
-      // Cross-registry: prove our own registration to the other registry with a PPID addressed to it.
+      // Cross-registry: prove our own registration to the other registry with a PPID addressed to it,
+      // disclosing only what that registry needs to vouch for the sub-agent's chain.
       const ctx = await this.contextFor(registry.id, { mode: 'pairwise' });
+      const attestation = present(ctx.attestation, (d) => SUMMARY_CLAIMS.includes(d.name));
       res = await postSigned(
         `${registry.url}/v1/registrations`,
-        { agent_jwk: publicOf(child.longTermKey.publicJwk), parent: { type: 'remote_agent', attestation: ctx.attestation }, records, provider, label, expires_in: expiresIn, lineage },
+        {
+          agent_jwk: agentJwk, agent_proof: child.keyProof(registry.id, AGENT_PROOF_PURPOSE.registration, `jkt:${ctx.key.kid}`),
+          parent: { type: 'remote_agent', attestation }, records, provider, label, expires_in: expiresIn, lineage,
+        },
         ctx.key,
         { embedJwk: true },
       );
