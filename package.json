@@ -1,7 +1,7 @@
 {
   "name": "aaf-reference",
   "version": "0.4.0",
-  "description": "Reference implementation of the Accountable Agents Framework: directories, records services, and a transaction simulator.",
+  "description": "Sample implementation of the Accountable Agents Framework: directories, records services, and a transaction simulator.",
   "type": "module",
   "private": true,
   "engines": {

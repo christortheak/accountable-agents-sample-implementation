@@ -339,8 +339,8 @@ export class Directory {
         },
         incidents: 'reports are relayed to the principal without telling the reporter who the principal is',
       },
-      signing_keys: 'held in files on the operator\'s server; no hardware protection and no rotation (reference implementation)',
-      security: 'a reference implementation for discussion and pilots; not operated to a production standard',
+      signing_keys: 'held in files on the operator\'s server; no hardware protection and no rotation (sample implementation)',
+      security: 'a sample implementation for discussion and pilots; not operated to a production standard',
     };
   }
 

@@ -1,6 +1,6 @@
 # Security
 
-This is a **reference implementation for research and discussion**, not production software. It exists to show that the Accountable Agents Framework can be built from existing standards, and to let people test it in a small pilot.
+This is a **sample implementation for research and discussion**, not production software. It exists to show that the Accountable Agents Framework can be built from existing standards, and to let people test it in a small pilot.
 
 ## Known limitations
 

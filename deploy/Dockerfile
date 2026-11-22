@@ -1,4 +1,4 @@
-# Accountable Agents Framework reference implementation: one image, several roles.
+# Accountable Agents Framework sample implementation: one image, several roles.
 #   default command:  the federation (trust anchor, directories, records services)
 #   counterparty:    node src/counterparty/standalone.js --config <file>
 # No dependencies to install: the code uses only Node's standard library.

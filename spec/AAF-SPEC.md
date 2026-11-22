@@ -1,8 +1,8 @@
-# Accountable Agents Framework: Reference Profile 0.4
+# Accountable Agents Framework: Sample Profile 0.4
 
 **Status:** draft for discussion · **Date:** 22 November 2026
 **Companion to:** *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026; "the paper")
-**Reference implementation:** this repository (`src/`), exercised by the simulator (`npm run sim`)
+**Sample implementation:** this repository (`src/`), exercised by the simulator (`npm run sim`)
 
 **Changes since 0.3:** the profile's code, APIs and wire formats now use the paper's terms throughout. Nothing else changed, but services and state from 0.3 do not work with 0.4. §1.1 lists every name that changed.
 - **Directory**, where the profile said *registry*. What it called a *record keeper* is a **records service**: one of the entities that act together as a directory.
@@ -25,7 +25,7 @@
 
 ## 0. About this document
 
-The paper is protocol-agnostic: its Appendix A lists the properties a system must have, and its conclusion invites "a reference implementation of a realistic workflow". This document is one such implementation, written as a specification. It turns each requirement into concrete formats, protocols and checks, and comes with running services and a transaction simulator that show the requirements are met.
+The paper is protocol-agnostic: its Appendix A lists the properties a system must have, and its conclusion invites "a reference implementation of a realistic workflow". This document is a sample of what one could look like, written as a specification: one set of choices, not the only one and not an authoritative one. It turns each requirement into concrete formats, protocols and checks, and comes with running services and a transaction simulator that show the requirements are met.
 
 Where the paper leaves a choice open, this profile makes one and marks it **Profile choice**. Section 3 maps the paper's requirements to this profile. Section 14 states what an implementation of this profile must do. Section 15 sets out which existing specifications are reused, and which of the paper's implementation options (its Appendix C) were chosen.
 
@@ -175,7 +175,7 @@ The profile also has words the paper does not:
 |---|---|---|---|
 | Setup | Principal enrolls; an identity verifier submits `verified_claims` | principal, verifier, directory | slow (days), once |
 | | Provider publishes a CycloneDX bill of materials | provider → provenance RS | once per build |
-| | Principal registers an agent (optionally with a depth budget or expiry); receives a receipt | principal → directory | under 1 ms in the reference implementation |
+| | Principal registers an agent (optionally with a depth budget or expiry); receives a receipt | principal → directory | under 1 ms in the sample implementation |
 | | Agents register sub-agents (persistent or ephemeral) | delegating agent → directory | under 1 ms each |
 | | Principal grants authority (RAR); grant deposited | principal → authorization RS | fast |
 | Transaction | Agent obtains an accountability credential for the counterparty | agent → directory | fast, cached per counterparty |
@@ -741,7 +741,7 @@ A service with its own accounts uses passkeys in three ways. The first two answe
 
 **Stolen tokens.** In passkey mode a bearer API token identifies an account but carries no authority. An agent that presents an account's token without the holder's authorization is refused. Such a presentation is itself evidence of credential theft, so the service SHOULD file an incident (§7.10) at once. The agent's principal is then notified on the first attempt (Scenario 3, branch C).
 
-Service endpoints (reference implementation): `POST /accounts/{account}/passkeys/options` and `/passkeys` (registration), `GET /accounts/{account}/requests` (pending approvals), `POST /accounts/{account}/human-requests` (open a human-path request), `POST /approval-requests/{id}/options` · `/approve` · `/decline`. Counterparty metadata publishes `webauthn: {rpId, origin}`.
+Service endpoints (sample implementation): `POST /accounts/{account}/passkeys/options` and `/passkeys` (registration), `GET /accounts/{account}/requests` (pending approvals), `POST /accounts/{account}/human-requests` (open a human-path request), `POST /approval-requests/{id}/options` · `/approve` · `/decline`. Counterparty metadata publishes `webauthn: {rpId, origin}`.
 
 **What a passkey approval proves.** "The holder of this registered authenticator approved this, just now, on this site." The service never sees the biometric, only the authenticator's user-verification flag. Software authenticators can set that flag without a person present. A service that needs hardware-backed assurance MUST require attestation at registration and check authenticator models, at some cost to consumer usability, since synced passkeys usually provide none. Approvals SHOULD be shown to the person in trusted UI, as W3C Secure Payment Confirmation does for payments, so a page cannot misrepresent what is being approved.
 
@@ -770,7 +770,7 @@ If a prohibition matches → not permitted. Otherwise the request is permitted i
 
 A delegated grant is accepted only if the parent allows delegation with depth remaining, the child expires no later, every child entry is covered by a parent entry (same type, actions a subset, constraints at least as strict), no child entry falls under a parent prohibition, and every constraint is a known type. Prohibitions are inherited. Counterparties see the delegation depth through nested `act`.
 
-A delegating agent SHOULD choose the child's expiry so that this holds. With no requested length, the default (seven days in the reference implementation) is cut to the parent grant's expiry, as a sub-agent's registration is cut to its parent's lifetime (§7.5). A requested length that would outlive the parent grant is refused before the grant is sent.
+A delegating agent SHOULD choose the child's expiry so that this holds. With no requested length, the default (seven days in the sample implementation) is cut to the parent grant's expiry, as a sub-agent's registration is cut to its parent's lifetime (§7.5). A requested length that would outlive the parent grant is refused before the grant is sent.
 
 ---
 

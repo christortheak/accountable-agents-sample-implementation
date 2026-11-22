@@ -1,8 +1,12 @@
-# Accountable Agents Framework: reference implementation
+# Accountable Agents Framework: a sample implementation
 
-A working implementation of the framework described in *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026). The paper's conclusion invites "a reference implementation of a realistic workflow"; this is one. It has four parts:
+A sample implementation of the framework described in *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026). It is one way to build what the paper describes, made to show that it can be built from existing standards and to give people something to run and argue with.
 
-- **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.4), with real example artifacts in [`spec/examples/`](spec/examples/). Its [§3](spec/AAF-SPEC.md#3-requirements-traceability) maps every requirement in the paper's Appendix A to the code and a test.
+It is a sample, not a reference: nothing here is official or definitive. The paper leaves most choices of format and protocol open, and the ones made here are examples that another implementation could make differently. Where this repository and the paper differ, the paper is right.
+
+It has four parts:
+
+- **A specification** of the choices this sample makes: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.4), with real example artifacts in [`spec/examples/`](spec/examples/). Its [§3](spec/AAF-SPEC.md#3-requirements-traceability) maps every requirement in the paper's Appendix A to the code and a test.
 - **Running services**: an OpenID Federation trust anchor, two federated directories (US and EU), and two records services (authorization and provenance; activity).
 - **A transaction simulator**: seven scenarios that check the expected outcome of each step. Scenario 4 is the pilot the paper calls for: a disclosed organization, a privacy-protected person, unsupported claims, and revoked or compromised credentials.
 - **A pilot kit** for running a live federation with invited participants: an `aaf` command-line tool, a standalone counterparty, and Docker and HTTPS configuration.
@@ -149,6 +153,6 @@ Runtime state lives in `data/`, which is git-ignored because it holds generated 
 
 ## Status
 
-This is a reference implementation for discussion, not production software. Locally it uses plain HTTP and simulated KYC; the pilot kit adds HTTPS but is meant for a small invited group, not open use. Keys are kept in files. [SECURITY.md](SECURITY.md) lists the known limitations and how to report a problem, and [spec §16](spec/AAF-SPEC.md#16-limitations-and-open-questions) lists the design limits and open questions.
+This is a sample implementation for discussion. It is not production software, and it is not a standard or a reference that other implementations must follow. Locally it uses plain HTTP and simulated KYC; the pilot kit adds HTTPS but is meant for a small invited group, not open use. Keys are kept in files. [SECURITY.md](SECURITY.md) lists the known limitations and how to report a problem, and [spec §16](spec/AAF-SPEC.md#16-limitations-and-open-questions) lists the design limits and open questions.
 
 Licensed under the [MIT License](LICENSE).
