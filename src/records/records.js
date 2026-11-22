@@ -1,13 +1,13 @@
-// Record keeper: holds authorization records (for principals), provenance
-// records (from agent providers) and activity logs (from agents and relying
-// parties). Every record is signed by its source, appended to a Merkle log, and
-// acknowledged with a receipt the submitter can use to hold the keeper to it.
+// Records service, a part of a directory that may be run apart from it: holds
+// authorization records (for principals), provenance records (from agent
+// providers) and activity logs (from agents and counterparties). Every record is signed by its source, appended to a Merkle log, and
+// acknowledged with a receipt the submitter can use to hold the records service to it.
 //
 // The authorization role also runs an OAuth 2.0 Token Exchange endpoint
 // (RFC 8693): the agent exchanges its grant (subject token) and its
 // accountability credential (actor token) for an audience-specific,
 // selectively disclosable authorization credential (SD-JWT VC) bound to its
-// per-relying-party key, so relying parties never see the principal's own
+// per-counterparty key, so counterparties never see the principal's own
 // signature (which would identify the principal). Authority is expressed as
 // RFC 9396 authorization_details; delegation chains as nested RFC 8693 `act`.
 import path from 'node:path';
@@ -19,7 +19,7 @@ import { MerkleLog } from '../lib/log.js';
 import { jwksOf } from '../lib/openid-federation.js';
 import { HttpError } from '../lib/http.js';
 import { checkAttenuation } from '../lib/scope.js';
-import { regBinding, TYP as REGISTRY_TYP } from '../registry/registry.js';
+import { regBinding, TYP as DIRECTORY_TYP } from '../directory/directory.js';
 import { SD_JWT_VC_TYP, vct } from '../lib/credentials.js';
 import { STATUS, allocateIndex, statusListToken } from '../lib/status-list.js';
 import { hostOf } from '../lib/openid-federation.js';
@@ -28,7 +28,7 @@ import { bindingChallenge, creationOptions, requestOptions, verifyRegistration, 
 export const TOKEN_EXCHANGE = {
   grantType: 'urn:ietf:params:oauth:grant-type:token-exchange',
   subjectTokenType: 'urn:ietf:params:oauth:token-type:jwt', // the grant (a JWS)
-  actorTokenType: 'urn:aaf:params:oauth:token-type:accountability', // the registry's SD-JWT VC
+  actorTokenType: 'urn:aaf:params:oauth:token-type:accountability', // the directory's SD-JWT VC
   requestedTokenType: 'urn:aaf:params:oauth:token-type:authorization', // an SD-JWT VC
   clientAssertionType: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', // RFC 7523
 };
@@ -52,7 +52,7 @@ export const TYP = {
   recordStatus: 'aaf-record-status+jwt',
 };
 
-export class RecordKeeper {
+export class RecordsService {
   constructor({ id, name, roles, keys, trustList, dataDir = null, allowTamperSimulation = false }) {
     this.id = id;
     this.name = name;
@@ -129,7 +129,7 @@ export class RecordKeeper {
     if (!this.roles.includes(role)) throw new HttpError(404, 'role_not_offered', `${this.id} does not keep ${role} records`);
   }
 
-  /** aaf_record_keeper metadata for this keeper's OpenID Federation Entity Configuration. */
+  /** aaf_records_service metadata for this records service's OpenID Federation Entity Configuration. */
   metadata(endpointBase) {
     return {
       organization_name: this.name,
@@ -140,15 +140,15 @@ export class RecordKeeper {
     };
   }
 
-  verifyRegistryToken(jws, typ) {
+  verifyDirectoryToken(jws, typ) {
     const { header, payload: unverified } = decodeJws(String(jws).split('~')[0]);
-    const registry = this.trust.registry(unverified.iss);
-    if (!registry) throw new HttpError(403, 'untrusted_registry', `${unverified.iss} is not a trusted registry`);
+    const directory = this.trust.directory(unverified.iss);
+    if (!directory) throw new HttpError(403, 'untrusted_directory', `${unverified.iss} is not a trusted directory`);
     try {
-      if (typ === REGISTRY_TYP.attestation) return verifySdJwt(jws, this.trust.signingKey(registry, header.kid), { typ }).payload;
-      return verifyJws(jws, this.trust.signingKey(registry, header.kid), { typ }).payload;
+      if (typ === DIRECTORY_TYP.attestation) return verifySdJwt(jws, this.trust.signingKey(directory, header.kid), { typ }).payload;
+      return verifyJws(jws, this.trust.signingKey(directory, header.kid), { typ }).payload;
     } catch (err) {
-      throw new HttpError(403, 'invalid_registry_token', err.message);
+      throw new HttpError(403, 'invalid_directory_token', err.message);
     }
   }
 
@@ -166,13 +166,13 @@ export class RecordKeeper {
     }
     const { payload: g, thumbprint: signer } = verified;
     if (this.grants.has(g.jti)) return { grant_id: g.jti, already: true };
-    const receipt = this.verifyRegistryToken(receiptJws, REGISTRY_TYP.registration);
-    const principalRefOf = (r) => `${r.iss}|${r.principal.id}`;
+    const receipt = this.verifyDirectoryToken(receiptJws, DIRECTORY_TYP.registration);
+    const principalRefOf = (r) => `${r.iss}|${r.parent.id}`;
 
     if (g.grantee?.kind === 'person') {
-      if (!this.passkeys.has(g.grantee.passkey)) throw new HttpError(400, 'unknown_passkey', 'the designee must first register a passkey with this keeper');
+      if (!this.passkeys.has(g.grantee.passkey)) throw new HttpError(400, 'unknown_passkey', 'the designee must first register a passkey with this records service');
       // A role designation for a human (for example a designated officer).
-      if (receipt.principal.type !== 'principal' || !receipt.principal.key_thumbprints.includes(signer)) {
+      if (receipt.parent.type !== 'principal' || !receipt.parent.key_thumbprints.includes(signer)) {
         throw new HttpError(403, 'not_principal', 'role designations must be signed by the principal');
       }
       const data = {
@@ -182,7 +182,7 @@ export class RecordKeeper {
       return { grant_id: g.jti, receipt: this.commit('grant.deposited', data) };
     }
 
-    if (g.sub !== receipt.sub || g.registry !== receipt.iss || g.agent_key !== receipt.agent_key) {
+    if (g.sub !== receipt.sub || g.directory !== receipt.iss || g.agent_key !== receipt.agent_key) {
       throw new HttpError(400, 'grant_receipt_mismatch', 'grant does not name the agent in the registration receipt');
     }
     const version = receipt.version ?? 0;
@@ -192,8 +192,8 @@ export class RecordKeeper {
     let principalRef;
     let effectiveProhibitions = g.prohibitions ?? [];
     let depth = 1;
-    if (receipt.principal.type === 'principal') {
-      if (!receipt.principal.key_thumbprints.includes(signer)) throw new HttpError(403, 'not_principal', 'grant is not signed by the registered principal');
+    if (receipt.parent.type === 'principal') {
+      if (!receipt.parent.key_thumbprints.includes(signer)) throw new HttpError(403, 'not_principal', 'grant is not signed by the registered principal');
       if (g.parent_grant) throw new HttpError(400, 'unexpected_parent', 'a principal grant has no parent grant');
       principalRef = principalRefOf(receipt);
     } else {
@@ -201,11 +201,11 @@ export class RecordKeeper {
       if (!parent || parent.kind !== 'agent') throw new HttpError(400, 'unknown_parent_grant', 'delegated grants must name a parent grant held here');
       const parentStatus = this.grantStatus(parent);
       if (parentStatus.status !== 'active') throw new HttpError(403, 'parent_grant_inactive', `parent grant is ${parentStatus.status}`);
-      if (signer !== parent.claims.agent_key) throw new HttpError(403, 'not_parent_agent', 'delegated grants must be signed by the parent agent');
+      if (signer !== parent.claims.agent_key) throw new HttpError(403, 'not_delegating_agent', 'delegated grants must be signed by the delegating agent');
       const linked =
-        receipt.principal.type === 'agent'
-          ? receipt.principal.registration === parent.claims.sub && receipt.iss === parent.claims.registry
-          : receipt.principal.registry === parent.claims.registry && regBinding(parent.claims.sub, parent.version ?? 0, receipt.principal.ppid) === receipt.principal.reg_binding;
+        receipt.parent.type === 'agent'
+          ? receipt.parent.registration === parent.claims.sub && receipt.iss === parent.claims.directory
+          : receipt.parent.directory === parent.claims.directory && regBinding(parent.claims.sub, parent.version ?? 0, receipt.parent.aaf_id) === receipt.parent.reg_binding;
       if (!linked) throw new HttpError(403, 'chain_mismatch', 'the registration chain does not run through the parent grant\'s agent');
       const att = checkAttenuation(g, { ...parent.claims, prohibitions: parent.effective_prohibitions });
       if (!att.ok) throw new HttpError(403, 'exceeds_parent_authority', att.errors.join('; '), att.errors);
@@ -251,7 +251,7 @@ export class RecordKeeper {
     return `${this.id}/status-lists/1`;
   }
 
-  /** Token Status List over every authorization credential and approval this keeper issued. */
+  /** Token Status List over every authorization credential and approval this records service issued. */
   statusList() {
     const values = new Map();
     for (const [idx, e] of this.statusIndex) {
@@ -277,7 +277,7 @@ export class RecordKeeper {
     const audience = params.audience;
     if (!audience) throw new OAuthError('invalid_target', 'audience is required');
 
-    // The subject token is the grant itself; it must be one this keeper holds.
+    // The subject token is the grant itself; it must be one this records service holds.
     let grantJti;
     try {
       grantJti = decodeJws(params.subject_token).payload.jti;
@@ -308,16 +308,16 @@ export class RecordKeeper {
     if (status.status !== 'active') throw new OAuthError('invalid_grant', `grant is ${status.status} (${status.reason})`);
     let att;
     try {
-      att = this.verifyRegistryToken(params.actor_token, REGISTRY_TYP.attestation);
+      att = this.verifyDirectoryToken(params.actor_token, DIRECTORY_TYP.attestation);
     } catch (err) {
       throw new OAuthError('invalid_grant', `actor_token: ${err.message}`);
     }
     if (att.vct !== vct(this.trust.trustAnchor.entity_id, 'accountability')) throw new OAuthError('invalid_grant', 'actor_token is not an accountability credential');
-    if (att.iss !== g.claims.registry) throw new OAuthError('invalid_grant', 'actor_token issued by a different registry than the grant names');
+    if (att.iss !== g.claims.directory) throw new OAuthError('invalid_grant', 'actor_token issued by a different directory than the grant names');
     if (att.aud !== audience) throw new OAuthError('invalid_target', 'actor_token is for a different audience');
     if (att.exp < now) throw new OAuthError('invalid_grant', 'actor_token expired');
     if (att.reg_binding !== regBinding(g.claims.sub, g.version ?? 0, att.sub)) {
-      throw new OAuthError('invalid_grant', "the actor's PPID does not belong to the grant's agent under the principal relationship the grant was made in");
+      throw new OAuthError('invalid_grant', "the actor's ID does not belong to the grant's agent under the principal relationship the grant was made in");
     }
 
     const ref = randomId('azr', 12);
@@ -325,7 +325,7 @@ export class RecordKeeper {
     const commitment = sha256b64u(`${salt}.${g.jws}`);
     const claims = g.claims;
     const statusIdx = allocateIndex(this.statusIndex);
-    // RFC 8693 act: the outermost actor is the acting agent (its PPID here);
+    // RFC 8693 act: the outermost actor is the acting agent (its ID here);
     // nested actors are the agents that delegated to it, under per-token
     // pseudonyms. sub is the principal, likewise pseudonymous.
     const pseudonym = () => `urn:aaf:pseudonym:${randomId('p', 12).slice(2)}`;
@@ -346,8 +346,8 @@ export class RecordKeeper {
       authorization_details: (claims.authorization_details ?? []).map((d) => sd(d)),
       prohibitions: g.effective_prohibitions,
       delegation: claims.delegation ?? { allowed: false, max_depth: 0 },
-      // Calendar dates only: an exact timestamp repeated across relying
-      // parties would link them. The keeper enforces the precise window.
+      // Calendar dates only: an exact timestamp repeated across
+      // counterparties would link them. The records service enforces the precise window.
       granted_on: new Date((claims.nbf ?? claims.iat) * 1000).toISOString().slice(0, 10),
       valid_until: claims.exp ? new Date(claims.exp * 1000).toISOString().slice(0, 10) : null,
       purpose: claims.purpose ? sd(claims.purpose) : undefined,
@@ -356,12 +356,12 @@ export class RecordKeeper {
       status: { status_list: { idx: statusIdx, uri: this.statusListUri } },
     };
     const token = issueSdJwt(body, this.keys.signing, { typ: TYP.authorization });
-    this.commit('authorization.attested', { ref, grant_id: g.id, ppid: att.sub, audience, salt, commitment, jti: body.jti, status_idx: statusIdx });
+    this.commit('authorization.attested', { ref, grant_id: g.id, aaf_id: att.sub, audience, salt, commitment, jti: body.jti, status_idx: statusIdx });
     return { access_token: token, issued_token_type: TOKEN_EXCHANGE.requestedTokenType, token_type: 'N_A', expires_in: body.exp - now };
   }
 
   // -------------------------------------------------------------------------
-  // Passkeys (WebAuthn) for designated humans. This keeper is the WebAuthn
+  // Passkeys (WebAuthn) for designated humans. This records service is the WebAuthn
   // relying party: rpId = its host, origin = its entity identifier.
   // -------------------------------------------------------------------------
 
@@ -405,26 +405,26 @@ export class RecordKeeper {
    * Step 1 of an approval: check the request makes sense, then issue a passkey
    * challenge that commits to exactly what is being approved.
    */
-  approvalOptions({ designation_id: designationId, ppid, action, subject_digest: subjectDigest, note }) {
+  approvalOptions({ designation_id: designationId, aaf_id, action, subject_digest: subjectDigest, note }) {
     this.requireRole('authorization');
     const d = this.grants.get(designationId);
     if (!d || d.kind !== 'role') throw new HttpError(404, 'unknown_designation', 'no such role designation');
     const ds = this.grantStatus(d);
     if (ds.status !== 'active') throw new HttpError(403, 'designation_inactive', `designation is ${ds.status} (${ds.reason})`);
-    const agentAttestation = [...this.attestations.values()].reverse().find((a) => a.ppid === ppid);
-    if (!agentAttestation) throw new HttpError(404, 'unknown_agent', 'no authorization issued here for that PPID');
+    const agentAttestation = [...this.attestations.values()].reverse().find((a) => a.aaf_id === aaf_id);
+    if (!agentAttestation) throw new HttpError(404, 'unknown_agent', 'no authorization issued here for that ID');
     const agentGrant = this.grants.get(agentAttestation.grant_id);
     if (agentGrant.principal_ref !== d.principal_ref) throw new HttpError(403, 'different_principal', 'designee and agent answer to different principals');
-    const details = { designation_id: d.id, role: d.claims.grantee.role, ppid, action, subject_digest: subjectDigest, note: note ?? null };
+    const details = { designation_id: d.id, role: d.claims.grantee.role, aaf_id, action, subject_digest: subjectDigest, note: note ?? null };
     const { id, challenge } = this.ceremony('approve', details);
     return { request_id: id, details, publicKey: requestOptions({ rpId: this.webauthnRp.rpId, challenge, credentials: [d.claims.grantee.passkey] }) };
   }
 
-  /** Step 2: the designee's passkey assertion over that challenge; the keeper countersigns an approval credential. */
+  /** Step 2: the designee's passkey assertion over that challenge; the records service countersigns an approval credential. */
   approve({ request_id: requestId, credential }) {
     this.requireRole('authorization');
     const c = this.takeCeremony(requestId, 'approve');
-    const { designation_id: designationId, ppid, action, subject_digest: subjectDigest, note } = c.details;
+    const { designation_id: designationId, aaf_id, action, subject_digest: subjectDigest, note } = c.details;
     const d = this.grants.get(designationId);
     const ds = this.grantStatus(d);
     if (ds.status !== 'active') throw new HttpError(403, 'designation_inactive', `designation is ${ds.status} (${ds.reason})`);
@@ -446,7 +446,7 @@ export class RecordKeeper {
     const approval = issueSdJwt(
       {
         vct: vct(this.trust.trustAnchor.entity_id, 'approval'),
-        iss: this.id, sub: ppid, iat: now, exp: now + 7 * 86400, jti: ref,
+        iss: this.id, sub: aaf_id, iat: now, exp: now + 7 * 86400, jti: ref,
         role: d.claims.grantee.role, action, subject_digest: subjectDigest,
         approver_ref: sha256b64u(`${d.id}|${ref}`),
         // How the human approved: a WebAuthn assertion with user verification, made just now.
@@ -457,7 +457,7 @@ export class RecordKeeper {
       { typ: TYP.approval },
     );
     const receipt = this.commit('approval.attested', {
-      ref, designation_id: d.id, ppid, action, subject_digest: subjectDigest, note, status_idx: statusIdx,
+      ref, designation_id: d.id, aaf_id, action, subject_digest: subjectDigest, note, status_idx: statusIdx,
       passkey: passkeyId, sign_count: result.signCount, assertion: credential,
     });
     return { approval, ref, receipt };
@@ -516,7 +516,7 @@ export class RecordKeeper {
     }
     const p = verified.payload;
     if (!p.subject || !p.writer_role || !p.event) throw new HttpError(400, 'invalid_activity', 'subject, writer_role and event are required');
-    if (!['agent', 'relying_party'].includes(p.writer_role)) throw new HttpError(400, 'invalid_activity', 'writer_role must be agent or relying_party');
+    if (!['agent', 'counterparty'].includes(p.writer_role)) throw new HttpError(400, 'invalid_activity', 'writer_role must be agent or counterparty');
     const receipt = this.commit('activity.appended', {
       subject: p.subject, txn: p.txn ?? null, writer_role: p.writer_role, writer: p.writer ?? null,
       writer_key: verified.thumbprint, event: p.event, jws: entry,
@@ -535,14 +535,14 @@ export class RecordKeeper {
     let orderCase = null;
     if (payload.order) {
       const { payload: unverified, header } = decodeJws(payload.order);
-      const authority = this.trust.authority(unverified.iss, 'resolution-authority');
-      if (!authority) throw new HttpError(403, 'untrusted_authority', 'order not issued by a recognized authority');
-      const order = verifyJws(payload.order, this.trust.signingKey(authority, header.kid), { typ: REGISTRY_TYP.order }).payload;
+      const authority = this.trust.authority(unverified.iss, 'designated-authority');
+      if (!authority) throw new HttpError(403, 'untrusted_authority', 'order not issued by a designated authority');
+      const order = verifyJws(payload.order, this.trust.signingKey(authority, header.kid), { typ: DIRECTORY_TYP.order }).payload;
       orderCase = order.case;
-      allowedByOrder = new Set(order.ppids);
-      if (payload.resolution) {
-        const res = this.verifyRegistryToken(payload.resolution, REGISTRY_TYP.resolution);
-        if (res.case === order.case) for (const p of res.related_ppids ?? []) allowedByOrder.add(p);
+      allowedByOrder = new Set(order.aaf_ids);
+      if (payload.attribution) {
+        const res = this.verifyDirectoryToken(payload.attribution, DIRECTORY_TYP.attribution);
+        if (res.case === order.case) for (const p of res.related_ids ?? []) allowedByOrder.add(p);
       }
     }
     const results = [];
@@ -556,21 +556,21 @@ export class RecordKeeper {
   }
 
   // -------------------------------------------------------------------------
-  // Development only: behave like a compromised keeper
+  // Development only: behave like a compromised records service
   // -------------------------------------------------------------------------
 
   tamper({ index, event, details }) {
-    if (!this.allowTamperSimulation) throw new HttpError(403, 'disabled', 'tamper simulation is disabled for this keeper');
+    if (!this.allowTamperSimulation) throw new HttpError(403, 'disabled', 'tamper simulation is disabled for this records service');
     const original = this.log.get(index);
     if (!original) throw new HttpError(404, 'no_entry', 'no such log entry');
     const forged = structuredClone(original);
     if (forged.data?.jws) {
-      // Rewrite the signed payload but keep the old signature, as a keeper
+      // Rewrite the signed payload but keep the old signature, as a records service
       // without the writer's key would have to.
       const [h, p, s] = forged.data.jws.split('.');
       const payload = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
       if (event) payload.event = event;
-      payload.details = details ? { ...payload.details, ...details } : { note: 'redacted by record keeper' };
+      payload.details = details ? { ...payload.details, ...details } : { note: 'redacted by records service' };
       forged.data.jws = `${h}.${b64u.encodeJson(payload)}.${s}`;
       forged.data.event = payload.event;
     }

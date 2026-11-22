@@ -52,7 +52,7 @@ test('the simulator can be rerun against the same running federation', { timeout
       assert.ok(ok, `run ${run}: unmet expectations:\n${failures.join('\n')}`);
     }
     // Two runs, but each character still has only one open record: verified principals did not double.
-    const stats = await getJson(`${federation.trustList.registry('https://registry-a.aaf.test').url}/v1/stats`);
+    const stats = await getJson(`${federation.trustList.directory('https://directory-a.aaf.test').url}/v1/stats`);
     assert.ok(stats.principals > stats.verified_principals, 'the first run\'s records were closed, not duplicated');
   } finally {
     await federation.close();

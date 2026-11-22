@@ -70,7 +70,7 @@ export function createAccounts({ rpId, origin, name }) {
 
     /**
      * Open an approval request for the account holder.
-     *   purpose 'delegate-agent': details { ppid, scope: [authorization_details], accountability }
+     *   purpose 'delegate-agent': details { aaf_id, scope: [authorization_details], accountability }
      *   purpose 'approve-action': details { action, params_digest, actor }  (actor = 'human' or a PPID)
      */
     openRequest(accountId, purpose, details, ttlSeconds = 600) {
@@ -109,7 +109,7 @@ export function createAccounts({ rpId, origin, name }) {
       r.challenge = null;
       r.evidence = { passkey: credential.id, user_verified: result.userVerified, approved_at: new Date().toISOString(), assertion: credential };
       if (r.purpose === 'delegate-agent') {
-        account.delegations.push({ ppid: r.details.ppid, scope: r.details.scope, until: Date.now() + (r.details.valid_for_seconds ?? 86400) * 1000, evidence: r.evidence });
+        account.delegations.push({ aaf_id: r.details.aaf_id, scope: r.details.scope, until: Date.now() + (r.details.valid_for_seconds ?? 86400) * 1000, evidence: r.evidence });
       }
       return { request_id: r.id, status: 'approved', user_verified: result.userVerified };
     },
@@ -121,9 +121,9 @@ export function createAccounts({ rpId, origin, name }) {
     },
 
     /** Is this agent (PPID) authorized by the account holder for this action? */
-    delegationFor(accountId, ppid, action) {
+    delegationFor(accountId, aaf_id, action) {
       const account = accounts.get(accountId);
-      return account?.delegations.find((d) => d.ppid === ppid && d.until > Date.now() && d.scope.some((s) => detailMatches(s, action))) ?? null;
+      return account?.delegations.find((d) => d.aaf_id === aaf_id && d.until > Date.now() && d.scope.some((s) => detailMatches(s, action))) ?? null;
     },
 
     /** Use a one-time action approval: it must match the account, actor, action and exact parameters. */

@@ -57,7 +57,7 @@ export function describeVerification(v) {
   return `${v.trust_framework}${v.assurance_level ? ` ${v.assurance_level}` : ''}: ${methods.join('; ')}`;
 }
 
-/** An attribute as a relying party sees it after disclosure. */
+/** An attribute as a counterparty sees it after disclosure. */
 export function normalizeAttribute(a) {
   const name = attributeName(a);
   return { name, value: a.claims[name], source: attributeSource(a), verifier: a.verification.verifier ?? null, valid_until: a.valid_until ?? null };

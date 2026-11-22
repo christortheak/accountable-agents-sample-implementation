@@ -17,17 +17,17 @@ export default {
 
   async run(world, n) {
     const { ledgerline } = world;
-    const datamart = await world.relyingParty({
+    const datamart = await world.counterparty({
       id: 'datamart.example', name: 'DataMart',
       rules: { 'data.query': [{ label: 'licensed data', require: { accountability: 'established', authorization: true } }] },
       handlers: { 'data.query': async (p) => ({ dataset: p.dataset, rows: p.rows }) },
     });
-    const dataGrant = (depth) => ({ rk: ledgerline, permissions: [{ action: 'data.query' }], delegation: { allowed: depth > 0, max_depth: depth } });
+    const dataGrant = (depth) => ({ rs: ledgerline, permissions: [{ action: 'data.query' }], delegation: { allowed: depth > 0, max_depth: depth } });
 
     n.step('A lineage with a depth budget');
     const orchard = await world.verifiedPrincipal({
       type: 'legal_person', identity: { legal_name: 'Orchard Analytics LLC', jurisdiction: 'US-WA', registration_number: 'WA-604112877' },
-      assurance: 'high', method: 'KYB: registry extract',
+      assurance: 'high', method: 'KYB: directory extract',
     });
     const atlas = world.agent('Atlas');
     await orchard.registerAgent(atlas, { label: 'Atlas (research orchestrator)', records: world.records(), lineage: { max_depth: 2 } });
@@ -47,7 +47,7 @@ export default {
     const helper = world.agent('task-1/helper');
     const helperReg = await tasks[0].registerSubagent(helper, { label: 'task-1 helper', records: world.records(), expiresIn: 3600 });
     const clampedMs = Date.parse(helperReg.expires_at) - Date.now();
-    n.act('task-1', `registers a helper and asks for an hour; the registry clamps it to its parent's lifetime (${(clampedMs / 1000).toFixed(1)} s left)`);
+    n.act('task-1', `registers a helper and asks for an hour; the directory clamps it to its parent's lifetime (${(clampedMs / 1000).toFixed(1)} s left)`);
     n.expect(clampedMs < 1600, 'no sub-agent outlives its parent');
     const tooDeep = await attempt(helper.registerSubagent(world.agent('too-deep'), { label: 'too deep', records: world.records() }));
     n.act('task-1 helper', `tries to add a third level → ${tooDeep.reasons?.[0] ?? 'accepted'}`);
@@ -93,14 +93,14 @@ export default {
     n.step('Atlas is sold, with its sub-agents, to another principal');
     const meridian = await world.verifiedPrincipal({
       type: 'legal_person', identity: { legal_name: 'Meridian Research Inc.', jurisdiction: 'US-NY', registration_number: 'NY-7740021' },
-      assurance: 'high', method: 'KYB: registry extract + beneficial ownership',
+      assurance: 'high', method: 'KYB: directory extract + beneficial ownership',
     });
-    const before = { atlas: results.Atlas.ppid, scout: results.Scout.ppid };
+    const before = { atlas: results.Atlas.aaf_id, scout: results.Scout.aaf_id };
     const oldAtlasCtx = atlas.contexts.get(datamart.id);
     const oldGrant = atlas.grants[0];
 
     const unverified = new Principal({
-      type: 'legal_person', identity: { legal_name: 'Unvetted Holdings Ltd', jurisdiction: 'US-NV' }, registry: world.regA, trust: world.trust,
+      type: 'legal_person', identity: { legal_name: 'Unvetted Holdings Ltd', jurisdiction: 'US-NV' }, directory: world.regA, trust: world.trust,
     });
     await unverified.enroll();
     const badOffer = await orchard.offerTransfer(atlas, unverified);
@@ -114,11 +114,11 @@ export default {
     const offered = (await meridian.notifications()).find((x) => x.kind === 'transfer_offer');
     n.act('Meridian Research Inc.', `is notified of the offer (${offered?.agent_label}, ${offered?.descendants} sub-agent(s)) and signs its acceptance with a fresh key for Atlas`);
     const accepted = await meridian.acceptTransfer(offer.offer_id, atlas);
-    n.act('Registry A', `records the transfer: ${accepted.descendants_moved} sub-agent(s) move with Atlas; every old PPID in the lineage is now "transferred"`);
+    n.act('Directory A', `records the transfer: ${accepted.descendants_moved} sub-agent(s) move with Atlas; every old PPID in the lineage is now "transferred"`);
     n.expect(accepted.descendants_moved === 2, 'Scout and Fetcher move with Atlas (the deregistered branch stays deregistered)');
 
     n.step('The old relationship has ended');
-    const replay = await world.handBuiltRequest({ rp: datamart, action: 'data.query', params: query('census'), accountability: oldAtlasCtx.attestation, authorization: oldAtlasCtx.authorization, proofKey: oldAtlasCtx.key });
+    const replay = await world.handBuiltRequest({ counterparty: datamart, action: 'data.query', params: query('census'), accountability: oldAtlasCtx.attestation, authorization: oldAtlasCtx.authorization, proofKey: oldAtlasCtx.key });
     n.decision("DataMart ← Atlas's pre-transfer credentials", replay);
     atlas.addGrant(oldGrant);
     const oldAuthority = await attempt(atlas.act(datamart.url, 'data.query', query('census')));
@@ -137,27 +137,27 @@ export default {
     const scoutAfter = await scout.act(datamart.url, 'data.query', query('census'));
     n.decision('DataMart ← Atlas', after);
     n.decision('DataMart ← Scout', scoutAfter);
-    n.detail('Atlas PPID at DataMart', `${short(before.atlas.split(':').pop(), 12)} → ${short(after.ppid.split(':').pop(), 12)}`);
-    n.detail('Scout PPID at DataMart', `${short(before.scout.split(':').pop(), 12)} → ${short(scoutAfter.ppid.split(':').pop(), 12)} (receipt version ${refreshed.version})`);
-    n.expect(after.decision === 'allow' && scoutAfter.decision === 'allow' && after.ppid !== before.atlas && scoutAfter.ppid !== before.scout,
+    n.detail('Atlas PPID at DataMart', `${short(before.atlas.split(':').pop(), 12)} → ${short(after.aaf_id.split(':').pop(), 12)}`);
+    n.detail('Scout PPID at DataMart', `${short(before.scout.split(':').pop(), 12)} → ${short(scoutAfter.aaf_id.split(':').pop(), 12)} (receipt version ${refreshed.version})`);
+    n.expect(after.decision === 'allow' && scoutAfter.decision === 'allow' && after.aaf_id !== before.atlas && scoutAfter.aaf_id !== before.scout,
       'new principal, new relationship, new PPIDs; sub-agents continue once re-authorized');
     const shared = sharedHandles(datamart.received.slice(0, receivedBefore), datamart.received.slice(receivedBefore + 1), publicValuesOf(world.trust, [datamart.id]));
     n.detail('values shared before and after the transfer', shared.length ? shared.map((x) => x.whereA).join(', ') : 'none');
     n.expect(shared.length === 0, "DataMart cannot link Meridian's use of Atlas to Orchard's history from what it was shown");
 
     n.step('Who answers for what: accountability follows the time of the conduct');
-    const order = world.court.order({ caseId: 'DataMart v. Does (licence audit)', ppids: [before.atlas, after.ppid], relyingParty: datamart.id, requester: 'DataMart' });
-    const r0 = await world.court.resolve(world.regA, { order, ppid: before.atlas });
-    const r1 = await world.court.resolve(world.regA, { order, ppid: after.ppid });
-    n.detail(`pre-transfer PPID (${r0.result.ppid_status})`, `${r0.result.root_principal.identity.legal_name}; current holder ${r0.result.current_principal?.legal_name}`);
-    n.detail('post-transfer PPID', r1.result.root_principal.identity.legal_name);
+    const order = world.court.order({ caseId: 'DataMart v. Does (licence audit)', aaf_ids: [before.atlas, after.aaf_id], counterparty: datamart.id, requester: 'DataMart' });
+    const r0 = await world.court.trace(world.regA, { order, aaf_id: before.atlas });
+    const r1 = await world.court.trace(world.regA, { order, aaf_id: after.aaf_id });
+    n.detail(`pre-transfer PPID (${r0.result.id_status})`, `${r0.result.principal.identity.legal_name}; current holder ${r0.result.current_principal?.legal_name}`);
+    n.detail('post-transfer PPID', r1.result.principal.identity.legal_name);
     n.detail('custody history', r1.result.chain[0].custody.map((c) => `${c.principal} (${c.from.slice(11, 19)}–${c.to ? c.to.slice(11, 19) : 'now'})`).join(' → '));
-    n.expect(r0.result.root_principal.identity.legal_name === 'Orchard Analytics LLC' && r1.result.root_principal.identity.legal_name === 'Meridian Research Inc.',
+    n.expect(r0.result.principal.identity.legal_name === 'Orchard Analytics LLC' && r1.result.principal.identity.legal_name === 'Meridian Research Inc.',
       'the old principal answers for conduct before the transfer; the new one for conduct after');
 
     n.step('A transfer can also end the lineage instead of moving it');
     const northgate = await world.verifiedPrincipal({
-      type: 'legal_person', identity: { legal_name: 'Northgate Labs Inc.', jurisdiction: 'US-MA' }, assurance: 'high', method: 'KYB: registry extract',
+      type: 'legal_person', identity: { legal_name: 'Northgate Labs Inc.', jurisdiction: 'US-MA' }, assurance: 'high', method: 'KYB: directory extract',
     });
     const offer2 = await meridian.offerTransfer(atlas, northgate, { subtree: 'end' });
     const accepted2 = await northgate.acceptTransfer(offer2.offer_id, atlas);

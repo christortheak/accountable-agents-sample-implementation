@@ -2,24 +2,24 @@
 //
 // The federation's governance body is the Trust Anchor. It publishes its
 // Entity Configuration and issues Subordinate Statements about each member
-// (registries, record keepers, identity verifiers, resolution authorities).
+// (directories, records services, identity verifiers, designated authorities).
 // Online members publish their own self-signed Entity Configurations.
-// Registries issue Trust Marks to the record keepers they accredit.
+// Directories issue Trust Marks to the records services they accredit.
 //
 // Entity types defined by this profile (metadata keys):
-//   aaf_trust_anchor, aaf_registry, aaf_record_keeper,
-//   aaf_identity_verifier, aaf_resolution_authority
+//   aaf_trust_anchor, aaf_directory, aaf_records_service,
+//   aaf_identity_verifier, aaf_designated_authority
 import { signJws, verifyJws, decodeJws, nowSeconds, publicOf } from './crypto.js';
 
 export const ENTITY_STATEMENT_TYP = 'entity-statement+jwt';
 export const TRUST_MARK_TYP = 'trust-mark+jwt';
 export const WELL_KNOWN = '/.well-known/openid-federation';
-export const ENTITY_TYPES = ['aaf_registry', 'aaf_record_keeper', 'aaf_identity_verifier', 'aaf_resolution_authority'];
+export const ENTITY_TYPES = ['aaf_directory', 'aaf_records_service', 'aaf_identity_verifier', 'aaf_designated_authority'];
 
 export const hostOf = (entityId) => new URL(entityId).host;
 
-/** Trust Mark type a registry issues to a record keeper accredited for one role. */
-export const trustMarkType = (trustAnchorId, role) => `${trustAnchorId}/trust-marks/record-keeper/${role}`;
+/** Trust Mark type a directory issues to a records service accredited for one role. */
+export const trustMarkType = (trustAnchorId, role) => `${trustAnchorId}/trust-marks/records-service/${role}`;
 
 export const jwksOf = (...keys) => ({ keys: keys.filter(Boolean).map((k) => ({ ...publicOf(k.publicJwk), use: k.publicJwk.crv === 'X25519' ? 'enc' : 'sig' })) });
 

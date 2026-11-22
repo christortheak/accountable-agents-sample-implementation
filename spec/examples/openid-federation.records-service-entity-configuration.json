@@ -2,26 +2,26 @@
   "header": {
     "alg": "EdDSA",
     "typ": "entity-statement+jwt",
-    "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg"
+    "kid": "bVKc-p3TUya4Pb6xwnYUqPLFdK7UG_l3dZ_TYhYkqMI"
   },
   "payload": {
     "iss": "https://records-1.aaf.test",
     "sub": "https://records-1.aaf.test",
-    "iat": 1795303625,
-    "exp": 1795390025,
+    "iat": 1795357490,
+    "exp": 1795443890,
     "jwks": {
       "keys": [
         {
           "crv": "Ed25519",
-          "x": "Glk711VAtk9D0KFV8gb96HNYUuJFEXw8kH0twUiZHfo",
+          "x": "VB7ho30xpyJdmFCbL5kT5vbDBVuU8cYMLv0_PGBSLvU",
           "kty": "OKP",
-          "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg",
+          "kid": "bVKc-p3TUya4Pb6xwnYUqPLFdK7UG_l3dZ_TYhYkqMI",
           "use": "sig"
         }
       ]
     },
     "metadata": {
-      "aaf_record_keeper": {
+      "aaf_records_service": {
         "organization_name": "Ledgerline Records (authorization + provenance)",
         "roles": [
           "authorization",
@@ -32,9 +32,9 @@
           "keys": [
             {
               "crv": "Ed25519",
-              "x": "Glk711VAtk9D0KFV8gb96HNYUuJFEXw8kH0twUiZHfo",
+              "x": "VB7ho30xpyJdmFCbL5kT5vbDBVuU8cYMLv0_PGBSLvU",
               "kty": "OKP",
-              "kid": "pxUYV-3dehPw-SL-CVeSEjzvyXbbqPOu2-OmQoAiXLg",
+              "kid": "bVKc-p3TUya4Pb6xwnYUqPLFdK7UG_l3dZ_TYhYkqMI",
               "use": "sig"
             }
           ]
@@ -53,19 +53,19 @@
     ],
     "trust_marks": [
       {
-        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/authorization",
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/records-service/authorization",
         "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
       },
       {
-        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/provenance",
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/records-service/provenance",
         "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
       },
       {
-        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/authorization",
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/records-service/authorization",
         "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
       },
       {
-        "trust_mark_type": "https://federation.aaf.test/trust-marks/record-keeper/provenance",
+        "trust_mark_type": "https://federation.aaf.test/trust-marks/records-service/provenance",
         "trust_mark": "eyJhbGciOiJFZERTQSIsInR5cCI6InRydXN0LW1h…"
       }
     ]

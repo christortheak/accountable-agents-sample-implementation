@@ -12,7 +12,7 @@ import { SoftwareAuthenticator } from '../src/lib/webauthn.js';
 test('passkey demo: register, approve the agent, replay the attack, step-up', { timeout: 60000 }, async () => {
   const federation = await startFederationInProcess({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-demo-test-')), portOffset: 6000 });
   const demo = await startDemo({ port: 4399, quiet: true, federation });
-  const base = demo.rp.url;
+  const base = demo.counterparty.url;
   const origin = demo.origin; // http://localhost:4399, as the browser would report it
   const post = async (p, body = {}) => (await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
   try {

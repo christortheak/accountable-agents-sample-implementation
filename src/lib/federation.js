@@ -8,8 +8,8 @@ import { loadFederationConfig, loadKeys, discoverFederation, fileNameFor, DATA_D
 import { postJson } from './http.js';
 import { jwksOf, trustMarkType, WELL_KNOWN } from './openid-federation.js';
 import { startTrustAnchor } from '../trustanchor/server.js';
-import { startRegistry } from '../registry/server.js';
-import { startRecordKeeper } from '../recordkeeper/server.js';
+import { startDirectory } from '../directory/server.js';
+import { startRecordsService } from '../records/server.js';
 
 export const pathsFor = (dataDir = DATA_DIR) => ({ dataDir, keysDir: path.join(dataDir, 'keys') });
 
@@ -48,21 +48,21 @@ export function setupFederation({ dataDir = DATA_DIR, reset = false, portOffset 
   const trustMarkIssuers = {};
   for (const svc of config.services) {
     const endpointBase = publicOr(svc);
-    if (svc.kind === 'registry') {
+    if (svc.kind === 'directory') {
       const keys = ensureKeys(svc.id, { encryption: true, pairwise: true, admin: true });
       members.push({
-        entity_id: svc.id, entity_type: 'aaf_registry',
+        entity_id: svc.id, entity_type: 'aaf_directory',
         jwks: jwksOf(keys.signing),
         metadata: { organization_name: svc.name, jurisdiction: svc.jurisdiction, endpoint_base: endpointBase, jwks: jwksOf(keys.signing, keys.encryption) },
       });
     } else {
       const keys = ensureKeys(svc.id, { admin: true });
       members.push({
-        entity_id: svc.id, entity_type: 'aaf_record_keeper',
+        entity_id: svc.id, entity_type: 'aaf_records_service',
         jwks: jwksOf(keys.signing),
         metadata: { organization_name: svc.name, roles: svc.roles, endpoint_base: endpointBase, jwks: jwksOf(keys.signing) },
       });
-      // Governance decision: which registries may accredit record keepers for which roles.
+      // Governance decision: which directories may accredit records services for which roles.
       for (const role of svc.roles) {
         const type = trustMarkType(ta.id, role);
         trustMarkIssuers[type] = [...new Set([...(trustMarkIssuers[type] ?? []), ...svc.accreditedBy])];
@@ -71,7 +71,7 @@ export function setupFederation({ dataDir = DATA_DIR, reset = false, portOffset 
   }
   for (const a of config.authorities) {
     const keys = ensureKeys(a.id, {});
-    const type = a.kind === 'verifier' ? 'aaf_identity_verifier' : 'aaf_resolution_authority';
+    const type = a.kind === 'verifier' ? 'aaf_identity_verifier' : 'aaf_designated_authority';
     members.push({ entity_id: a.id, entity_type: type, jwks: jwksOf(keys.signing), metadata: { organization_name: a.name, jwks: jwksOf(keys.signing) } });
   }
 
@@ -95,8 +95,8 @@ export async function startFederationInProcess({ dataDir = DATA_DIR, portOffset 
       id: svc.id, port: svc.port + portOffset, host: listenHost, trustList: initial,
       keys: loadKeys(svc.id, paths.keysDir), dataDir: path.join(dataDir, fileNameFor(svc.id)), quiet,
     };
-    if (svc.kind === 'registry') handles.push(await startRegistry(common));
-    else handles.push(await startRecordKeeper({ ...common, allowTamperSimulation: Boolean(svc.allowTamperSimulation) }));
+    if (svc.kind === 'directory') handles.push(await startDirectory(common));
+    else handles.push(await startRecordsService({ ...common, allowTamperSimulation: Boolean(svc.allowTamperSimulation) }));
   }
   await accreditAll({ trustList: initial, paths, config, portOffset });
   const trustList = await discoverFederation(trustAnchor);
@@ -105,25 +105,25 @@ export async function startFederationInProcess({ dataDir = DATA_DIR, portOffset 
 }
 
 /**
- * Each registry accredits the record keepers that applied to it by issuing
- * Trust Marks; the keepers publish them in their Entity Configurations.
+ * Each directory accredits the records services that applied to it by issuing
+ * Trust Marks; the records services publish them in their Entity Configurations.
  */
 export async function accreditAll({ trustList, paths, config, portOffset = 0 }) {
   // Operator calls go to each co-located service directly, never over the
   // internet, so a public deployment can block /admin/* at its proxy.
   const adminUrl = (id) => urlFor(config, config.services.find((s) => s.id === id).port, portOffset);
   const results = [];
-  for (const svc of config.services.filter((s) => s.kind === 'record-keeper')) {
-    const rk = trustList.recordKeeper(svc.id);
+  for (const svc of config.services.filter((s) => s.kind === 'records-service')) {
+    const rs = trustList.recordsService(svc.id);
     const marks = [];
-    for (const registryId of svc.accreditedBy) {
-      const { adminToken } = loadKeys(registryId, paths.keysDir);
-      const res = await postJson(`${adminUrl(registryId)}/admin/accreditations`, { rk: rk.id }, { authorization: `Bearer ${adminToken}` });
+    for (const directoryId of svc.accreditedBy) {
+      const { adminToken } = loadKeys(directoryId, paths.keysDir);
+      const res = await postJson(`${adminUrl(directoryId)}/admin/accreditations`, { rs: rs.id }, { authorization: `Bearer ${adminToken}` });
       marks.push(...res.trust_marks);
-      results.push({ registry: registryId, rk: rk.id, already: Boolean(res.already), types: res.trust_marks.map((m) => m.trust_mark_type) });
+      results.push({ directory: directoryId, rs: rs.id, already: Boolean(res.already), types: res.trust_marks.map((m) => m.trust_mark_type) });
     }
-    const { adminToken } = loadKeys(rk.id, paths.keysDir);
-    await postJson(`${adminUrl(rk.id)}/admin/trust-marks`, { trust_marks: marks }, { authorization: `Bearer ${adminToken}` });
+    const { adminToken } = loadKeys(rs.id, paths.keysDir);
+    await postJson(`${adminUrl(rs.id)}/admin/trust-marks`, { trust_marks: marks }, { authorization: `Bearer ${adminToken}` });
   }
   return results;
 }

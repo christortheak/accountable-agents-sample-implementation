@@ -5,10 +5,10 @@
   "forwardPorts": [4100, 4101, 4102, 4201, 4202, 4400],
   "portsAttributes": {
     "4100": { "label": "Trust anchor" },
-    "4101": { "label": "Registry A" },
-    "4102": { "label": "Registry B" },
-    "4201": { "label": "Record keeper (authorization + provenance)" },
-    "4202": { "label": "Record keeper (activity)" },
+    "4101": { "label": "Directory A" },
+    "4102": { "label": "Directory B" },
+    "4201": { "label": "Records service (authorization + provenance)" },
+    "4202": { "label": "Records service (activity)" },
     "4400": { "label": "Sandbox shop" }
   }
 }

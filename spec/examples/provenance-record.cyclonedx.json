@@ -2,12 +2,12 @@
   "header": {
     "alg": "EdDSA",
     "typ": "aaf-provenance+jwt",
-    "kid": "ZcoI3zyj06PwrDen7B8E1QmctKXsAfsZwic7wE28Ujw",
+    "kid": "k2V_Xu1s7e8mQ7roPPq5PNtecaWh06ZqgZkTjvqB9nw",
     "jwk": {
       "crv": "Ed25519",
-      "x": "NzlQuk1ZfE7i4RI0-8na_yijN9iBE8vdBD7IYlFZSR8",
+      "x": "iMKWW8lXtQW_iWtZObwdx55f7y38gjvR2_W0uIEFsG8",
       "kty": "OKP",
-      "kid": "ZcoI3zyj06PwrDen7B8E1QmctKXsAfsZwic7wE28Ujw"
+      "kid": "k2V_Xu1s7e8mQ7roPPq5PNtecaWh06ZqgZkTjvqB9nw"
     }
   },
   "payload": {
@@ -18,10 +18,10 @@
     "bom": {
       "bomFormat": "CycloneDX",
       "specVersion": "1.6",
-      "serialNumber": "urn:uuid:3c289c79-ecb4-4abd-803e-7778b33340f9",
+      "serialNumber": "urn:uuid:927c81de-4a74-4223-89a5-ecb06ed3a567",
       "version": 1,
       "metadata": {
-        "timestamp": "2026-11-21T23:27:05.978Z",
+        "timestamp": "2026-11-22T14:24:50.527Z",
         "supplier": {
           "name": "Example Agents Inc.",
           "contact": [
@@ -50,7 +50,7 @@
             },
             {
               "name": "aaf:incident-response:notify-principal-via",
-              "value": "registry"
+              "value": "directory"
             }
           ]
         }
@@ -82,6 +82,6 @@
         }
       ]
     },
-    "iat": 1795303625
+    "iat": 1795357490
   }
 }

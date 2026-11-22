@@ -11,20 +11,20 @@
   },
   "services": [
     {
-      "id": "https://registry.example.org",
-      "publicUrl": "https://registry.example.org",
-      "kind": "registry",
-      "name": "AAF Pilot Registry",
+      "id": "https://directory.example.org",
+      "publicUrl": "https://directory.example.org",
+      "kind": "directory",
+      "name": "AAF Pilot Directory",
       "jurisdiction": "US",
       "port": 4101
     },
     {
       "id": "https://records.example.org",
       "publicUrl": "https://records.example.org",
-      "kind": "record-keeper",
-      "name": "AAF Pilot Record Keeper",
+      "kind": "records-service",
+      "name": "AAF Pilot Records Service",
       "roles": ["authorization", "provenance", "activity"],
-      "accreditedBy": ["https://registry.example.org"],
+      "accreditedBy": ["https://directory.example.org"],
       "port": 4201
     }
   ],
@@ -35,8 +35,8 @@
       "name": "AAF pilot team (identity verification from personal knowledge)"
     },
     {
-      "id": "https://federation.example.org/resolution-authority",
-      "kind": "resolution-authority",
+      "id": "https://federation.example.org/designated-authority",
+      "kind": "designated-authority",
       "name": "AAF pilot team acting as a mock court (demonstrations only)"
     }
   ],

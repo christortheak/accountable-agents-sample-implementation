@@ -57,7 +57,7 @@ esac
 step "Generate the configs from the pilot templates (example.org -> pilot.test)"
 mkdir -p deploy/test/out
 sed 's/example\.org/pilot.test/g' config/federation.pilot.example.json > deploy/test/out/federation.pilot.json
-sed 's/example\.org/pilot.test/g' config/rp.pilot.example.json > deploy/test/out/rp.pilot.json
+sed 's/example\.org/pilot.test/g' config/counterparty.pilot.example.json > deploy/test/out/counterparty.pilot.json
 ok "deploy/test/out/"
 
 step "Build the image"
@@ -98,19 +98,19 @@ expect allow 30
 expect deny 60
 
 step "Public pages, and operator endpoints blocked"
-for host in federation registry records shop; do
+for host in federation directory records shop; do
   [ "$(status $host.pilot.test /)" = 200 ] || die "https://$host.pilot.test/ is not serving"
 done
-for host in federation registry records; do
+for host in federation directory records; do
   [ "$(status $host.pilot.test /admin/trust-marks)" = 404 ] || die "/admin is reachable on $host.pilot.test"
 done
 ok "all four status pages serve over HTTPS; /admin returns 404"
 
-step "Operator: resolve the agent's identifier under a (demonstration) order"
-ppid=$(purchase 5 | sed -n 's/.*"ppid": "\([^"]*\)".*/\1/p')
-[ -n "$ppid" ] || die "no PPID in the shop's answer"
-operator resolve "$ppid" --case "pilot check" --rp https://shop.pilot.test | grep -q "Pilot Check" || die "operator resolve"
-ok "$ppid resolved to Pilot Check"
+step "Operator: trace the agent's ID under a (demonstration) order"
+aaf_id=$(purchase 5 | sed -n 's/.*"aaf_id": "\([^"]*\)".*/\1/p')
+[ -n "$aaf_id" ] || die "no ID in the shop's answer"
+operator trace "$aaf_id" --case "pilot check" --counterparty https://shop.pilot.test | grep -q "Pilot Check" || die "operator trace"
+ok "$aaf_id traced to Pilot Check"
 
 step "Restart everything: keys, registrations and grants survive"
 compose restart

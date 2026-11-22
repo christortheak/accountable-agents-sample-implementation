@@ -1,6 +1,6 @@
 # Accountable Agents Framework reference implementation: one image, several roles.
-#   default command:  the federation (trust anchor, registries, record keepers)
-#   relying party:    node src/rp/standalone.js --config <file>
+#   default command:  the federation (trust anchor, directories, records services)
+#   counterparty:    node src/counterparty/standalone.js --config <file>
 # No dependencies to install: the code uses only Node's standard library.
 FROM node:22-alpine
 WORKDIR /app

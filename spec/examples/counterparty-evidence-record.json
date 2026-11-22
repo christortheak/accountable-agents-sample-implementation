@@ -1,6 +1,6 @@
 {
-  "txn": "txn_25pk5wwszdmthhz6",
-  "at": "2026-11-21T23:27:05.988Z",
+  "txn": "txn_b2g12kx0rnjyjr49",
+  "at": "2026-11-22T14:24:50.543Z",
   "action": "commerce.purchase",
   "params": {
     "amount": {
@@ -13,11 +13,11 @@
   "reasons": [],
   "tier": "standard",
   "classification": "ACCOUNTABLE_DISCLOSED",
-  "ppid": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm",
+  "aaf_id": "aaf:directory-a.aaf.test:p_pdz5mx2grz8kr498ahg5ny9pn4",
   "id_mode": "pairwise",
-  "registry": "https://registry-a.aaf.test",
+  "directory": "https://directory-a.aaf.test",
   "sealed_ref": null,
-  "root": {
+  "principal": {
     "type": "legal_person",
     "trust_framework": "aaf_kyb",
     "assurance": "high",
@@ -50,20 +50,20 @@
     "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…",
     "eyJhbGciOiJFZERTQSIsInR5cCI6InN0…"
   ],
-  "presentation_digest": "c0nIlsmPM9rXA1ND7MF1zfzfnhHJvZLsvzrmPXW7zRM",
+  "presentation_digest": "8MIg7PeiW4qhFfGxXgIspzNGa6gMmVukZc04jbYitfU",
   "checks": [
     {
-      "name": "issued by a federation registry",
+      "name": "issued by a federation directory",
       "ok": true,
-      "detail": "https://registry-a.aaf.test"
+      "detail": "https://directory-a.aaf.test"
     },
     {
-      "name": "registry signature valid (SD-JWT VC)",
+      "name": "directory signature valid (SD-JWT VC)",
       "ok": true,
       "detail": "https://federation.aaf.test/vct/accountability/1"
     },
     {
-      "name": "issued for this relying party",
+      "name": "issued for this counterparty",
       "ok": true,
       "detail": "shop.example"
     },
@@ -88,17 +88,17 @@
       "detail": "VALID"
     },
     {
-      "name": "authorization from a federation record keeper",
+      "name": "authorization from a federation records service",
       "ok": true,
       "detail": "https://records-1.aaf.test"
     },
     {
-      "name": "record keeper holds https://registry-a.aaf.test's trust mark for authorization records",
+      "name": "records service holds https://directory-a.aaf.test's trust mark for authorization records",
       "ok": true,
       "detail": "trust mark verified"
     },
     {
-      "name": "authorization bound to this agent (act.sub = PPID, same cnf key)",
+      "name": "authorization bound to this agent (act.sub = the ID, same cnf key)",
       "ok": true,
       "detail": ""
     },
@@ -121,10 +121,10 @@
   "activity_receipt": {
     "log_id": "https://records-2.aaf.test",
     "index": 0,
-    "leaf_hash": "3uuBden-tAOhjAwmdpnUlW1GQJlG0mlfF2iRiWPSilg",
+    "leaf_hash": "KJjGakn-_L7Lsaue3HiPN4IxPAMxAO7rFmRfUVK7uq0",
     "tree_size": 1,
     "inclusion_proof": [],
-    "sth": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1zdGgrand0Iiwia2lkIjoiamhuTjRYMnA2cHl5NTRwQmsyRWwzRHRQYXI3MjRybkNGemRyX0tUbjFEMCJ9.eyJsb2dfaWQiOiJodHRwczovL3JlY29yZHMtMi5hYWYudGVzdCIsInRyZWVfc2l6ZSI6MSwicm9vdF9oYXNoIjoiM3V1QmRlbi10QU9oakF3bWRwblVsVzFHUUpsRzBtbGZGMmlSaVdQU2lsZyIsInRpbWVzdGFtcCI6MTc5NTMwMzYyNTk4OX0.vDWJw3e0WDqf_NXDaiSo3llmZzj--A7s5XveDBo6BWn571hZf2NQSSgn4zv9PT00dhaQI5JJR03LzyHpZUPkBQ"
+    "sth": "eyJhbGciOiJFZERTQSIsInR5cCI6ImFhZi1zdGgrand0Iiwia2lkIjoiaHp1MlYyM2JfR1hNTkQ4T1p0dXQ3X1RNd0stUEhHMlp3QW9oRTdYSktNayJ9.eyJsb2dfaWQiOiJodHRwczovL3JlY29yZHMtMi5hYWYudGVzdCIsInRyZWVfc2l6ZSI6MSwicm9vdF9oYXNoIjoiS0pqR2Frbi1fTDdMc2F1ZTNIaVBONEl4UEFNeEFPN3JGbVJmVVZLN3VxMCIsInRpbWVzdGFtcCI6MTc5NTM1NzQ5MDU0NH0.io8G0rEqbJPmoLKDOpdPOwKTCvJvpLtlfZsNOgDYwHALzCvvo7UN0PLJJiV0r6zp1vgzvVW7yREQpTGEzBe8Ag"
   },
   "account_gate": null
 }

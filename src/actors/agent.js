@@ -1,22 +1,22 @@
-// Agent SDK. An agent holds a long-term key known only to its registry and
-// record keepers, and a separate presentation key per relying party (pairwise
-// mode) or per presentation (ephemeral mode), so nothing it shows one relying
-// party can be matched against what it shows another.
+// Agent SDK. An agent holds a long-term key known only to its directory and
+// records services, and a separate presentation key per counterparty (a PPID)
+// or per presentation (an unlinkable ID), so nothing it shows one counterparty
+// can be matched against what it shows another.
 import { generateSigningKey, signJws, nowSeconds, randomId, digestOf, publicOf, decodeJws } from '../lib/crypto.js';
 import { postJson, getJson, postSigned, ServiceError } from '../lib/http.js';
 import { present, unpackSdJwt } from '../lib/sd-jwt.js';
 import { detailMatches, toRar } from '../lib/scope.js';
-import { RP_METADATA_PATH } from '../lib/protocol.js';
+import { COUNTERPARTY_METADATA_PATH } from '../lib/protocol.js';
 import { buildPresentationRequest } from '../lib/presentation.js';
-import { TYP as RK_TYP, TOKEN_EXCHANGE } from '../recordkeeper/recordkeeper.js';
-import { TYP as REGISTRY_TYP, AGENT_PROOF_PURPOSE } from '../registry/registry.js';
+import { TYP as RS_TYP, TOKEN_EXCHANGE } from '../records/records.js';
+import { TYP as DIRECTORY_TYP, AGENT_PROOF_PURPOSE } from '../directory/directory.js';
 
 const IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration_number', 'lei'];
 /** Optional claims about the principal and the chain; shown only on request. */
 const SUMMARY_CLAIMS = ['principal_type', 'assurance', 'verification_source', 'chain_length', 'principal_directory'];
 
 /**
- * What a relying party asks for on one action: its standing requests, plus
+ * What a counterparty asks for on one action: its standing requests, plus
  * the claims that action's policy tiers say they need.
  */
 export function requestsFor(meta, action) {
@@ -37,28 +37,28 @@ export class Agent {
     this.name = name;
     this.trust = trust;
     this.longTermKey = generateSigningKey();
-    this.registry = null;
+    this.directory = null;
     this.registrationId = null;
     this.receipt = null;
     this.records = [];
     this.grants = [];
     this.contexts = new Map(); // audience -> pairwise context
-    this.rpMetadata = new Map();
+    this.counterpartyMetadata = new Map();
   }
 
-  attach({ registry, registrationId, receipt, records }) {
-    this.registry = registry;
+  attach({ directory, registrationId, receipt, records }) {
+    this.directory = directory;
     this.registrationId = registrationId;
     this.receipt = receipt;
     this.records = records ?? [];
   }
 
   /** grant: the grant JWS, which the agent presents as the subject token in token exchange. */
-  addGrant({ grantId, rk, grant }) {
-    this.grants.unshift({ grantId, rk, grant });
+  addGrant({ grantId, rs, grant }) {
+    this.grants.unshift({ grantId, rs, grant });
   }
 
-  /** New long-term key and receipt (after a transfer or key rotation): every per-RP credential starts over. */
+  /** New long-term key and receipt (after a transfer or key rotation): every per-counterparty credential starts over. */
   rekey(newKey, receipt) {
     this.longTermKey = newKey;
     this.receipt = receipt;
@@ -68,7 +68,7 @@ export class Agent {
 
   /** Fetch a current receipt, e.g. after an ancestor changed hands. Old grants no longer bind, so they are dropped. */
   async refreshReceipt() {
-    const res = await this.call(`${this.registry.url}/v1/registrations/${this.registrationId}/receipt`, {});
+    const res = await this.call(`${this.directory.url}/v1/registrations/${this.registrationId}/receipt`, {});
     if (res.receipt !== this.receipt) {
       const changed = res.version !== peek(this.receipt).version;
       this.receipt = res.receipt;
@@ -84,11 +84,11 @@ export class Agent {
    * Proof that this agent holds a key (AG-2): a statement signed with the key,
    * for one directory, one purpose, and one registrant, registration or offer.
    */
-  keyProof(registryId, purpose, binding, key = this.longTermKey) {
-    return signJws({ aud: registryId, purpose, binding, agent_key: key.kid, iat: nowSeconds() }, key, { typ: REGISTRY_TYP.agentProof });
+  keyProof(directoryId, purpose, binding, key = this.longTermKey) {
+    return signJws({ aud: directoryId, purpose, binding, agent_key: key.kid, iat: nowSeconds() }, key, { typ: DIRECTORY_TYP.agentProof });
   }
 
-  /** A request to the agent's registry, signed (RFC 9421) with its long-term key. */
+  /** A request to the agent's directory, signed (RFC 9421) with its long-term key. */
   call(url, params) {
     return postSigned(url, params, this.longTermKey, { keyid: `registration:${this.registrationId}` });
   }
@@ -102,9 +102,9 @@ export class Agent {
     const now = nowSeconds();
     if (!ctx) ctx = { audience, mode, key: generateSigningKey() };
     if (!ctx.attestation || ctx.expiresAt - REFRESH_MARGIN_SECONDS < now) {
-      const res = await this.call(`${this.registry.url}/v1/attestations`, { audience, mode, cnf_jwk: publicOf(ctx.key.publicJwk) });
+      const res = await this.call(`${this.directory.url}/v1/attestations`, { audience, mode, cnf_jwk: publicOf(ctx.key.publicJwk) });
       ctx.attestation = res.attestation;
-      ctx.ppid = res.ppid;
+      ctx.aaf_id = res.aaf_id;
       ctx.expiresAt = res.expires_at;
       ctx.authorization = null;
     }
@@ -120,7 +120,7 @@ export class Agent {
   }
 
   /**
-   * RFC 8693 Token Exchange at the authorization record keeper: the grant is the
+   * RFC 8693 Token Exchange at the authorization records service: the grant is the
    * subject token, the accountability credential the actor token; the agent
    * authenticates with an RFC 7523 JWT assertion signed by its long-term key.
    */
@@ -128,7 +128,7 @@ export class Agent {
     const now = nowSeconds();
     const clientId = `urn:aaf:registration:${this.registrationId}`;
     const assertion = signJws(
-      { iss: clientId, sub: clientId, aud: `${grant.rk.id}/token`, iat: now, exp: now + 60, jti: randomId('ca', 12) },
+      { iss: clientId, sub: clientId, aud: `${grant.rs.id}/token`, iat: now, exp: now + 60, jti: randomId('ca', 12) },
       this.longTermKey,
       { typ: 'JWT', embedJwk: true },
     );
@@ -145,9 +145,9 @@ export class Agent {
     });
     let res;
     try {
-      res = await fetch(`${grant.rk.url}/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(5000) });
+      res = await fetch(`${grant.rs.url}/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(5000) });
     } catch (err) {
-      throw new ServiceError(0, 'unreachable', `could not reach ${grant.rk.url}: ${err.message}`);
+      throw new ServiceError(0, 'unreachable', `could not reach ${grant.rs.url}: ${err.message}`);
     }
     const json = await res.json();
     if (!res.ok) throw new ServiceError(res.status, json.error, json.error_description);
@@ -160,25 +160,25 @@ export class Agent {
   }
 
   // -------------------------------------------------------------------------
-  // Acting at a relying party
+  // Acting at a counterparty
   // -------------------------------------------------------------------------
 
-  async metadataFor(rpUrl) {
-    if (!this.rpMetadata.has(rpUrl)) this.rpMetadata.set(rpUrl, await getJson(`${rpUrl}${RP_METADATA_PATH}`));
-    return this.rpMetadata.get(rpUrl);
+  async metadataFor(counterpartyUrl) {
+    if (!this.counterpartyMetadata.has(counterpartyUrl)) this.counterpartyMetadata.set(counterpartyUrl, await getJson(`${counterpartyUrl}${COUNTERPARTY_METADATA_PATH}`));
+    return this.counterpartyMetadata.get(counterpartyUrl);
   }
 
   /**
-   * Ask a relying party to perform an action.
+   * Ask a counterparty to perform an action.
    * opts.disclose: { identity: bool, attributes: [names], provenance: bool, purpose: bool,
    *                  principal_type, assurance, verification_source, chain_length, principal_directory: bool,
    *                  activity_log: bool (default true: the pointer to the shared activity log) }
-   *   (defaults: the ID alone, plus only what the relying party asks for on this action and the principal allowed)
+   *   (defaults: the ID alone, plus only what the counterparty asks for on this action and the principal allowed)
    * opts.approval: an approval credential to carry
    * opts.headers: extra headers, e.g. a service's passkey approval reference (aaf-approval-ref)
    */
-  async act(rpUrl, action, params = {}, opts = {}) {
-    const meta = await this.metadataFor(rpUrl);
+  async act(counterpartyUrl, action, params = {}, opts = {}) {
+    const meta = await this.metadataFor(counterpartyUrl);
     const ctx = await this.contextFor(meta.id, { mode: opts.mode ?? 'pairwise', grantId: opts.grantId });
     const requested = requestsFor(meta, action);
     const disclose = {
@@ -196,7 +196,7 @@ export class Agent {
       if (d.value && typeof d.value === 'object' && 'claims' in d.value && 'verification' in d.value) {
         return disclose.attributes.includes(Object.keys(d.value.claims)[0]);
       }
-      if (d.value && typeof d.value === 'object' && 'role' in d.value && 'rk' in d.value) {
+      if (d.value && typeof d.value === 'object' && 'role' in d.value && 'rs' in d.value) {
         // Record pointers: where the shared activity log is (so both sides can write to it), and the bill of materials on request.
         if (d.value.role === 'activity') return disclose.activity_log;
         return d.value.role === 'provenance' && disclose.provenance;
@@ -212,8 +212,8 @@ export class Agent {
         })
       : undefined;
 
-    const url = `${rpUrl}/actions/${action}`;
-    const { body, headers } = buildPresentationRequest({ url, rpId: meta.id, params, accountability, authorization, approval: opts.approval, key: ctx.key });
+    const url = `${counterpartyUrl}/actions/${action}`;
+    const { body, headers } = buildPresentationRequest({ url, counterpartyId: meta.id, params, accountability, authorization, approval: opts.approval, key: ctx.key });
     const presentation = { accountability, authorization, approval: opts.approval };
     const started = performance.now();
     const res = await fetch(url, { method: 'POST', headers: { ...headers, ...(opts.headers ?? {}) }, body });
@@ -223,23 +223,23 @@ export class Agent {
     const agentLog = await this.logActivity(ctx, {
       txn: response.txn,
       event: 'action',
-      details: { action, params_digest: digestOf(params), outcome: response.decision, at_rp: meta.id },
+      details: { action, params_digest: digestOf(params), outcome: response.decision, at_counterparty: meta.id },
     });
-    return { httpStatus: res.status, ...response, ppid: ctx.ppid, mode: ctx.mode, latencyMs, presentation, agentLog };
+    return { httpStatus: res.status, ...response, aaf_id: ctx.aaf_id, mode: ctx.mode, latencyMs, presentation, agentLog };
   }
 
-  /** The agent's own account of what it did, written to the activity record keeper named in its registration. */
+  /** The agent's own account of what it did, written to the activity records service named in its registration. */
   async logActivity(ctx, { txn, event, details }) {
     const pointer = this.records.find((r) => r.role === 'activity');
     if (!pointer) return null;
-    const rk = this.trust.recordKeeper(pointer.rk);
+    const rs = this.trust.recordsService(pointer.rs);
     const entry = signJws(
-      { subject: ctx.ppid, txn: txn ?? null, writer_role: 'agent', event, details, at: new Date().toISOString() },
+      { subject: ctx.aaf_id, txn: txn ?? null, writer_role: 'agent', event, details, at: new Date().toISOString() },
       ctx.key,
-      { typ: RK_TYP.activity, embedJwk: true },
+      { typ: RS_TYP.activity, embedJwk: true },
     );
     try {
-      return (await postJson(`${rk.url}/v1/activity`, { entry })).receipt;
+      return (await postJson(`${rs.url}/v1/activity`, { entry })).receipt;
     } catch {
       return null;
     }
@@ -249,34 +249,34 @@ export class Agent {
   // Acting as a delegating agent: registering and authorizing sub-agents (AG-3)
   // -------------------------------------------------------------------------
 
-  async registerSubagent(child, { registry = this.registry, label, records, provider = null, expiresIn = null, lineage = null }) {
+  async registerSubagent(child, { directory = this.directory, label, records, provider = null, expiresIn = null, lineage = null }) {
     let res;
     const agentJwk = publicOf(child.longTermKey.publicJwk);
-    if (registry.id === this.registry.id) {
-      res = await this.call(`${registry.url}/v1/registrations`, {
-        agent_jwk: agentJwk, agent_proof: child.keyProof(registry.id, AGENT_PROOF_PURPOSE.registration, `registration:${this.registrationId}`),
+    if (directory.id === this.directory.id) {
+      res = await this.call(`${directory.url}/v1/registrations`, {
+        agent_jwk: agentJwk, agent_proof: child.keyProof(directory.id, AGENT_PROOF_PURPOSE.registration, `registration:${this.registrationId}`),
         parent: { type: 'agent' }, records, provider, label, expires_in: expiresIn, lineage,
       });
     } else {
-      // Cross-registry: prove our own registration to the other registry with a PPID addressed to it,
-      // disclosing only what that registry needs to vouch for the sub-agent's chain.
-      const ctx = await this.contextFor(registry.id, { mode: 'pairwise' });
+      // Cross-directory: prove our own registration to the other directory with an ID addressed to it,
+      // disclosing only what that directory needs to vouch for the sub-agent's chain.
+      const ctx = await this.contextFor(directory.id, { mode: 'pairwise' });
       const attestation = present(ctx.attestation, (d) => SUMMARY_CLAIMS.includes(d.name));
       res = await postSigned(
-        `${registry.url}/v1/registrations`,
+        `${directory.url}/v1/registrations`,
         {
-          agent_jwk: agentJwk, agent_proof: child.keyProof(registry.id, AGENT_PROOF_PURPOSE.registration, `jkt:${ctx.key.kid}`),
+          agent_jwk: agentJwk, agent_proof: child.keyProof(directory.id, AGENT_PROOF_PURPOSE.registration, `jkt:${ctx.key.kid}`),
           parent: { type: 'remote_agent', attestation }, records, provider, label, expires_in: expiresIn, lineage,
         },
         ctx.key,
         { embedJwk: true },
       );
     }
-    child.attach({ registry, registrationId: res.registration_id, receipt: res.receipt, records });
+    child.attach({ directory, registrationId: res.registration_id, receipt: res.receipt, records });
     return res;
   }
 
-  /** Delegate part of this agent's authority to a sub-agent. The record keeper enforces that it only narrows. */
+  /** Delegate part of this agent's authority to a sub-agent. The records service enforces that it only narrows. */
   async delegate(child, { permissions, prohibitions = [], delegation = { allowed: false, max_depth: 0 }, validForDays, purpose, grantId }) {
     const parentGrant = grantId ? this.grants.find((g) => g.grantId === grantId) : this.grants[0];
     if (!parentGrant) throw new Error(grantId ? `no grant ${grantId} to delegate from` : 'this agent holds no grant to delegate from');
@@ -284,9 +284,9 @@ export class Agent {
     const exp = delegatedGrantExpiry({ now, parentExp: decodeJws(parentGrant.grant).payload.exp, validForDays });
     const grant = signJws(
       {
-        iss: `agent:${this.registrationId}@${this.registry.id}`,
+        iss: `agent:${this.registrationId}@${this.directory.id}`,
         sub: child.registrationId,
-        registry: child.registry.id,
+        directory: child.directory.id,
         agent_key: child.longTermKey.kid,
         iat: now,
         nbf: now,
@@ -299,19 +299,19 @@ export class Agent {
         parent_grant: parentGrant.grantId,
       },
       this.longTermKey,
-      { typ: RK_TYP.grant, embedJwk: true },
+      { typ: RS_TYP.grant, embedJwk: true },
     );
-    const res = await postJson(`${parentGrant.rk.url}/v1/grants`, { grant, registration_receipt: child.receipt });
-    child.addGrant({ grantId: res.grant_id, rk: parentGrant.rk, grant });
+    const res = await postJson(`${parentGrant.rs.url}/v1/grants`, { grant, registration_receipt: child.receipt });
+    child.addGrant({ grantId: res.grant_id, rs: parentGrant.rs, grant });
     return res;
   }
 
   async revokeSubagent(child, reason = 'principal_request') {
-    if (child.registry.id === this.registry.id) {
-      return this.call(`${child.registry.url}/v1/registrations/${child.registrationId}/revoke`, { reason });
+    if (child.directory.id === this.directory.id) {
+      return this.call(`${child.directory.url}/v1/registrations/${child.registrationId}/revoke`, { reason });
     }
-    const ctx = await this.contextFor(child.registry.id, { mode: 'pairwise' });
-    return postSigned(`${child.registry.url}/v1/registrations/${child.registrationId}/revoke`, { reason }, ctx.key, { embedJwk: true });
+    const ctx = await this.contextFor(child.directory.id, { mode: 'pairwise' });
+    return postSigned(`${child.directory.url}/v1/registrations/${child.registrationId}/revoke`, { reason }, ctx.key, { embedJwk: true });
   }
 }
 
@@ -323,7 +323,7 @@ export const DEFAULT_DELEGATION_DAYS = 7;
  * at parentExp. With no requested length, the default is cut to the parent's
  * expiry, as a sub-agent's registration is cut to its parent's lifetime. A
  * requested length that would outlive the parent is refused here, naming the
- * parent's expiry; the record keeper refuses it as well (spec §11.3).
+ * parent's expiry; the records service refuses it as well (spec §11.3).
  */
 export function delegatedGrantExpiry({ now, parentExp, validForDays }) {
   if (validForDays == null) {

@@ -1,12 +1,12 @@
-// Registry (the paper's "directory"): verifies principals (via trusted
+// Directory: verifies principals (via trusted
 // identity verifiers), registers agents into chains that end at a verified
-// principal, issues IDs (reusable pairwise PPIDs and single-use IDs) in
-// accountability credentials, tracks status, points to record keepers,
-// accredits record keepers, and recovers the principal behind an ID only
+// principal, issues IDs (reusable PPIDs and unlinkable, single-use IDs) in
+// accountability credentials, tracks status, points to records services,
+// accredits the records services that keep records for it, and recovers the principal behind an ID only
 // under consent or legal process (identity escrow).
 //
-// State is event-sourced from the registry's own Merkle log, so every change
-// the registry makes is covered by its signed tree heads.
+// State is event-sourced from the directory's own Merkle log, so every change
+// the directory makes is covered by its signed tree heads.
 import path from 'node:path';
 import {
   base32, hmac, randomId, randomBytes, nowSeconds, signJws, verifyJws, decodeJws, sealJwe, openJwe,
@@ -21,23 +21,23 @@ import fs from 'node:fs';
 import { hostOf, issueTrustMark, trustMarkType, jwksOf } from '../lib/openid-federation.js';
 import { HttpError, postJson, postSigned, ServiceError } from '../lib/http.js';
 
-/** A signed call from this registry to a federation peer. */
-const peerCall = (registry, url, params) => postSigned(url, params, registry.keys.signing, { keyid: `registry:${registry.id}` });
+/** A signed call from this directory to a federation peer. */
+const peerCall = (directory, url, params) => postSigned(url, params, directory.keys.signing, { keyid: `directory:${directory.id}` });
 
 export const TYP = {
   attestation: SD_JWT_VC_TYP, // SD-JWT VC; vct distinguishes credential kinds
   registration: 'aaf-registration+jwt',
   status: 'aaf-status+jwt',
-  resolution: 'aaf-resolution+jwt',
+  attribution: 'aaf-attribution+jwt',
   order: 'aaf-legal-order+jwt',
-  forward: 'aaf-resolution-forward+jwt',
+  forward: 'aaf-attribution-forward+jwt',
   agentProof: 'aaf-agent-proof+jwt',
 };
 
 /** What an agent's proof of possession is for (AG-2, AG-5). */
 export const AGENT_PROOF_PURPOSE = { registration: 'aaf-agent-registration', rotation: 'aaf-agent-key-rotation', transfer: 'aaf-agent-transfer' };
 
-/** Scope a legal order must carry before a registry revokes under it. */
+/** Scope a legal order must carry before a directory revokes under it. */
 export const ORDER_SCOPE_REVOKE = 'revoke_registration';
 
 /** Decoy padding for the accountability credential, so digest counts do not distinguish principals. */
@@ -66,27 +66,27 @@ const DISCLOSABLE_IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration
 
 /**
  * Binding between a registration (at a given chain version) and one of its
- * PPIDs; lets record keepers check that a PPID belongs to a grant's agent under
+ * IDs; lets records services check that an ID belongs to a grant's agent under
  * the same principal relationship. A transfer bumps the version, so grants made
  * under the previous principal no longer bind.
  */
-export const regBinding = (registrationId, version, ppid) => sha256b64u(`aaf-binding|${registrationId}|${version}|${ppid}`);
+export const regBinding = (registrationId, version, aaf_id) => sha256b64u(`aaf-binding|${registrationId}|${version}|${aaf_id}`);
 
 /**
  * IDs are written aaf:<directory host>:p_… (a PPID: reusable, one per agent and
- * counterparty) or aaf:<directory host>:e_… (single-use). The host names the
- * issuing directory. The earlier "ppid:" prefix is still read.
+ * counterparty) or aaf:<directory host>:u_… (unlinkable: used once). The host
+ * names the issuing directory.
  */
 export const ID_PREFIX = 'aaf';
-export const registryOfPpid = (ppid) => {
-  const m = /^(?:aaf|ppid):([^:]+):[pe]_[0-9a-z]+$/.exec(ppid ?? '');
+export const directoryOfId = (aaf_id) => {
+  const m = /^aaf:([^:]+):[pu]_[0-9a-z]+$/.exec(aaf_id ?? '');
   return m ? m[1] : null;
 };
 
-export class Registry {
+export class Directory {
   constructor({ id, name, jurisdiction, url, keys, trustList, dataDir = null }) {
     this.id = id;
-    this.host = hostOf(id); // embedded in every PPID this registry issues
+    this.host = hostOf(id); // embedded in every ID this directory issues
     this.name = name;
     this.jurisdiction = jurisdiction;
     this.url = url;
@@ -97,21 +97,21 @@ export class Registry {
     this.identityKeys = new Map(); // verified identity -> principal id (PV-3)
     this.registrations = new Map();
     this.agentKeys = new Map(); // thumbprint -> registration id
-    this.ppids = new Map(); // pairwise ppid -> { registration, audience }
+    this.aaf_ids = new Map(); // pairwise aaf_id -> { registration, audience }
     this.accreditations = new Map();
     this.incidents = new Map();
     this.notifications = new Map(); // principal id -> []
     this.remoteStatusCache = new Map();
     this.transferOffers = new Map();
-    // Token Status List entries: idx -> pairwise PPID, or an ephemeral attestation's located registration.
+    // Token Status List entries: idx -> pairwise PPID, or an unlinkable attestation's located registration.
     this.statusIndex = new Map();
-    this.ephemeralFile = dataDir ? path.join(dataDir, 'ephemeral-status.json') : null;
-    this.log = new MerkleLog({ logId: id, signer: keys.signing, file: dataDir ? path.join(dataDir, 'registry-log.jsonl') : null });
+    this.unlinkableFile = dataDir ? path.join(dataDir, 'unlinkable-status.json') : null;
+    this.log = new MerkleLog({ logId: id, signer: keys.signing, file: dataDir ? path.join(dataDir, 'directory-log.jsonl') : null });
     for (const entry of this.log.entries) this.apply(entry);
-    // Ephemeral attestations keep a status entry only until they expire; the
-    // registry keeps no lasting record linking ephemeral PPIDs to registrations.
-    if (this.ephemeralFile && fs.existsSync(this.ephemeralFile)) {
-      for (const e of JSON.parse(fs.readFileSync(this.ephemeralFile, 'utf8'))) if (e.exp > nowSeconds()) this.statusIndex.set(e.idx, e);
+    // Unlinkable attestations keep a status entry only until they expire; the
+    // directory keeps no lasting record linking unlinkable IDs to registrations.
+    if (this.unlinkableFile && fs.existsSync(this.unlinkableFile)) {
+      for (const e of JSON.parse(fs.readFileSync(this.unlinkableFile, 'utf8'))) if (e.exp > nowSeconds()) this.statusIndex.set(e.idx, e);
     }
   }
 
@@ -119,28 +119,28 @@ export class Registry {
     return `${this.id}/status-lists/1`;
   }
 
-  rememberEphemeral(entry) {
+  rememberUnlinkable(entry) {
     const now = nowSeconds();
-    for (const [idx, e] of this.statusIndex) if (e.ephemeral && e.exp < now) this.statusIndex.delete(idx);
+    for (const [idx, e] of this.statusIndex) if (e.unlinkable && e.exp < now) this.statusIndex.delete(idx);
     this.statusIndex.set(entry.idx, entry);
-    if (this.ephemeralFile) {
-      fs.mkdirSync(path.dirname(this.ephemeralFile), { recursive: true });
-      fs.writeFileSync(this.ephemeralFile, JSON.stringify([...this.statusIndex.values()].filter((e) => e.ephemeral)));
+    if (this.unlinkableFile) {
+      fs.mkdirSync(path.dirname(this.unlinkableFile), { recursive: true });
+      fs.writeFileSync(this.unlinkableFile, JSON.stringify([...this.statusIndex.values()].filter((e) => e.unlinkable)));
     }
   }
 
-  /** The registry's Token Status List: one entry per pairwise PPID and per live ephemeral attestation. */
+  /** The directory's Token Status List: one entry per pairwise PPID and per live unlinkable attestation. */
   async statusList() {
     const values = new Map();
     const code = { active: STATUS.VALID, revoked: STATUS.INVALID, expired: STATUS.INVALID, suspended: STATUS.SUSPENDED, unknown: STATUS.SUSPENDED, transferred: STATUS.TRANSFERRED };
     for (const [idx, e] of this.statusIndex) {
-      const located = e.ephemeral
+      const located = e.unlinkable
         ? { registration: this.registrations.get(e.registration), version: e.version }
         : (() => {
-            const rec = this.ppids.get(e.ppid);
+            const rec = this.aaf_ids.get(e.aaf_id);
             return { registration: this.registrations.get(rec.registration), version: rec.version ?? 0 };
           })();
-      values.set(idx, code[(await this.ppidStatus(located)).status] ?? STATUS.INVALID);
+      values.set(idx, code[(await this.idStatus(located)).status] ?? STATUS.INVALID);
     }
     return statusListToken({ issuer: this.id, key: this.keys.signing, uri: this.statusListUri, values, ttl: this.policies.statusListTtlSeconds ?? 10 });
   }
@@ -204,11 +204,11 @@ export class Registry {
         r.custody.push({ epoch: data.epoch, principal: data.to, from: at, to: null, offer: data.offer });
         r.epoch = data.epoch;
         r.parent = { type: 'principal', id: to.id, key_thumbprints: to.keys.map(thumbprint) };
-        r.root_principal = to.id;
+        r.principal = to.id;
         this.agentKeys.delete(thumbprint(r.agent_jwk));
         r.agent_jwk = data.agent_jwk;
         this.agentKeys.set(thumbprint(data.agent_jwk), r.id);
-        for (const d of this.descendants(r)) if (d.root_principal) d.root_principal = to.id;
+        for (const d of this.descendants(r)) if (d.principal) d.principal = to.id;
         this.transferOffers.get(data.offer).status = 'accepted';
         break;
       }
@@ -231,15 +231,15 @@ export class Registry {
         r.revocation = { reason: data.reason, by: data.by, at };
         break;
       }
-      case 'ppid.issued':
-        this.ppids.set(data.ppid, { registration: data.registration, audience: data.audience, version: data.version, root: data.root, status_idx: data.status_idx, issued_at: at });
-        if (data.status_idx != null) this.statusIndex.set(data.status_idx, { idx: data.status_idx, ppid: data.ppid });
+      case 'aaf_id.issued':
+        this.aaf_ids.set(data.aaf_id, { registration: data.registration, audience: data.audience, version: data.version, root: data.root, status_idx: data.status_idx, issued_at: at });
+        if (data.status_idx != null) this.statusIndex.set(data.status_idx, { idx: data.status_idx, aaf_id: data.aaf_id });
         break;
       case 'accreditation.granted':
-        this.accreditations.set(data.rk, { ...data, status: 'active' });
+        this.accreditations.set(data.rs, { ...data, status: 'active' });
         break;
       case 'accreditation.withdrawn':
-        if (this.accreditations.has(data.rk)) this.accreditations.get(data.rk).status = 'withdrawn';
+        if (this.accreditations.has(data.rs)) this.accreditations.get(data.rs).status = 'withdrawn';
         break;
       case 'incident.reported':
         this.incidents.set(data.id, { ...data, at });
@@ -250,10 +250,10 @@ export class Registry {
         this.notifications.set(data.principal, list);
         break;
       }
-      case 'resolution.performed':
+      case 'attribution.performed':
         break;
       default:
-        throw new Error(`unknown registry event ${type}`);
+        throw new Error(`unknown directory event ${type}`);
     }
   }
 
@@ -261,14 +261,14 @@ export class Registry {
   // Metadata
   // -------------------------------------------------------------------------
 
-  /** aaf_registry metadata for this registry's OpenID Federation Entity Configuration. */
+  /** aaf_directory metadata for this directory's OpenID Federation Entity Configuration. */
   metadata() {
     return {
       organization_name: this.name,
       jurisdiction: this.jurisdiction,
       endpoint_base: this.url,
       jwks: jwksOf(this.keys.signing, this.keys.encryption),
-      id_modes: ['pairwise', 'ephemeral'],
+      id_modes: ['pairwise', 'unlinkable'],
       practices: this.practices(),
       policies: {
         revocation_interval_seconds: this.policies.revocationIntervalSeconds,
@@ -281,7 +281,7 @@ export class Registry {
         registrations: '/v1/registrations',
         attestations: '/v1/attestations',
         status: '/v1/status',
-        resolutions: '/v1/resolutions',
+        attributions: '/v1/attributions',
         revocations: '/v1/revocations',
         practices: '/v1/practices',
         incidents: '/v1/incidents',
@@ -312,19 +312,19 @@ export class Registry {
         agents: 'an Ed25519 key whose possession the agent proves at registration; a separate key per counterparty or per presentation is bound into each ID',
       },
       ids: {
-        modes: { pairwise: 'reusable: at most one per agent and counterparty (a PPID)', ephemeral: 'single-use and unlinkable' },
+        modes: { pairwise: 'reusable: at most one per agent and counterparty (a PPID)', unlinkable: 'used once, so presentations cannot be linked by their IDs' },
         validity_seconds: pol.attestationTtlSeconds,
         claims: 'every claim except the ID is selectively disclosable by the agent',
       },
       revocation: {
-        by: ['the principal', 'a delegating agent, for its sub-agents', 'this directory, for fraud or under its operating rules', 'a recognized authority, by legal order'],
+        by: ['the principal', 'a delegating agent, for its sub-agents', 'this directory, for fraud or under its operating rules', 'a designated authority, by legal order'],
         cascades_to_sub_agents: true,
         latency_seconds: { bound: pol.revocationIntervalSeconds, status_list_refresh: pol.statusListTtlSeconds ?? 10, without_status_check: pol.attestationTtlSeconds },
         status: 'a published Token Status List, fetched whole: this directory does not learn which ID a counterparty checks',
       },
       records: {
         held: ['principal records with verified identity', 'agent records and their chains', 'custody history', 'pairwise IDs issued and their counterparties', 'incident reports', 'disclosures made'],
-        not_held: ['authorizations', 'bills of materials', 'activity (accredited record keepers hold these)', 'a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)'],
+        not_held: ['authorizations', 'bills of materials', 'activity (accredited records services hold these)', 'a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)'],
         retention_years: pol.recordRetentionYears,
         kept_after_revocation: true,
         log: 'every change is an entry in an append-only Merkle log with signed tree heads',
@@ -332,8 +332,8 @@ export class Registry {
       disclosure: {
         to_counterparties: 'identity claims only where the principal\'s disclosure policy names the claim and the counterparty',
         attribution: {
-          process: 'a legal order from a recognized authority that names the ID; single-use IDs also need the sealed reference the counterparty kept',
-          authorities: ids(this.trust.doc?.resolution_authorities),
+          process: 'a legal order from a designated authority that names the ID; single-use IDs also need the sealed reference the counterparty kept',
+          authorities: ids(this.trust.doc?.designated_authorities),
           logged: true,
           principal_notified: 'yes, unless the order forbids it',
         },
@@ -345,7 +345,7 @@ export class Registry {
   }
 
   // -------------------------------------------------------------------------
-  // Signer resolution for signed requests
+  // Signer attribution for signed requests
   //   kid "principal:<id>"     -> the principal's enrolled key
   //   kid "registration:<id>"  -> the agent's long-term key
   //   kid "verifier:<id>"      -> a trusted identity verifier (trust list)
@@ -362,8 +362,8 @@ export class Registry {
       const r = this.registrations.get(kid.slice('registration:'.length));
       return r ? r.agent_jwk : null;
     }
-    if (kid.startsWith('registry:')) {
-      const peer = this.trust.registry(kid.slice('registry:'.length));
+    if (kid.startsWith('directory:')) {
+      const peer = this.trust.directory(kid.slice('directory:'.length));
       return peer && peer.id !== this.id ? this.trust.signingKey(peer) : null;
     }
     if (kid.startsWith('verifier:')) {
@@ -451,7 +451,7 @@ export class Registry {
     const p = this.mustPrincipal(principalId);
     if (p.closed) return { principal_id: p.id, status: 'closed', already: true };
     this.commit('principal.closed', { id: p.id, reason });
-    const regs = [...this.registrations.values()].filter((r) => r.root_principal === p.id);
+    const regs = [...this.registrations.values()].filter((r) => r.principal === p.id);
     const peersNotified = await this.pushStatusChange(regs);
     return { principal_id: p.id, status: 'closed', registrations_suspended: regs.filter((r) => r.status === 'active').length, peers_notified: peersNotified };
   }
@@ -481,8 +481,8 @@ export class Registry {
     this.checkAgentProof(payload.agent_proof, agentJwk, { purpose: AGENT_PROOF_PURPOSE.registration, binding: registrant });
 
     let parentLink;
-    let rootPrincipal = null;
-    let rootSummary = null;
+    let principal = null;
+    let principalSummary = null;
     let depth;
     const kid = header.kid ?? '';
 
@@ -493,16 +493,16 @@ export class Registry {
         throw new HttpError(403, 'principal_not_verified', 'the principal must be verified before registering agents');
       }
       parentLink = { type: 'principal', id: p.id, key_thumbprints: p.keys.map(thumbprint) };
-      rootPrincipal = p.id;
+      principal = p.id;
       depth = 1;
     } else if (parent.type === 'agent') {
-      if (!kid.startsWith('registration:')) throw new HttpError(401, 'wrong_signer', 'sub-agent registrations must be signed by the parent agent');
+      if (!kid.startsWith('registration:')) throw new HttpError(401, 'wrong_signer', 'sub-agent registrations must be signed by the delegating agent');
       const parentReg = this.registrations.get(kid.slice('registration:'.length));
       const status = await this.registrationStatus(parentReg);
       if (status.status !== 'active') throw new HttpError(403, 'parent_inactive', `parent registration is ${status.status}`);
       parentLink = { type: 'agent', registration: parentReg.id, agent_key: thumbprint(parentReg.agent_jwk) };
-      rootPrincipal = parentReg.root_principal;
-      rootSummary = parentReg.root_summary ?? null;
+      principal = parentReg.principal;
+      principalSummary = parentReg.principal_summary ?? null;
       depth = parentReg.depth + 1;
       // A lineage budget set on any ancestor limits how deep its sub-agents may go.
       for (const a of [parentReg, ...this.ancestors(parentReg)]) {
@@ -513,7 +513,7 @@ export class Registry {
     } else if (parent.type === 'remote_agent') {
       const remote = await this.verifyRemoteParent(parent.attestation, jwk);
       parentLink = remote.link;
-      rootSummary = remote.rootSummary;
+      principalSummary = remote.principalSummary;
       depth = remote.depth;
     } else {
       throw new HttpError(400, 'invalid_parent', 'parent.type must be principal, agent or remote_agent');
@@ -532,15 +532,15 @@ export class Registry {
     }
 
     for (const rec of records) {
-      const acc = this.accreditations.get(rec.rk);
+      const acc = this.accreditations.get(rec.rs);
       if (!acc || acc.status !== 'active' || !acc.roles.includes(rec.role)) {
-        throw new HttpError(400, 'record_keeper_not_accredited', `${rec.rk} is not accredited by ${this.id} for ${rec.role} records`);
+        throw new HttpError(400, 'records_service_not_accredited', `${rec.rs} is not accredited by ${this.id} for ${rec.role} records`);
       }
     }
 
     const id = randomId('reg');
     this.commit('registration.created', {
-      id, agent_jwk: publicOf(agentJwk), parent: parentLink, root_principal: rootPrincipal, root_summary: rootSummary,
+      id, agent_jwk: publicOf(agentJwk), parent: parentLink, principal: principal, principal_summary: principalSummary,
       depth, provider, records, label,
       expires_at: expiresAt ? new Date(expiresAt).toISOString() : null, lineage_max_depth: lineageMaxDepth,
     });
@@ -570,17 +570,17 @@ export class Registry {
 
   /** Current registration receipt: who the agent answers to now, at which chain version. */
   receiptFor(reg) {
-    let principal = reg.parent;
+    let parent = reg.parent;
     if (reg.parent.type === 'principal') {
       const p = this.principals.get(reg.parent.id);
-      principal = { type: 'principal', id: p.id, key_thumbprints: p.keys.map(thumbprint) };
+      parent = { type: 'principal', id: p.id, key_thumbprints: p.keys.map(thumbprint) };
     } else if (reg.parent.type === 'agent') {
       const parentReg = this.registrations.get(reg.parent.registration);
-      principal = { type: 'agent', registration: parentReg.id, agent_key: thumbprint(parentReg.agent_jwk) };
+      parent = { type: 'agent', registration: parentReg.id, agent_key: thumbprint(parentReg.agent_jwk) };
     }
     return signJws(
       {
-        iss: this.id, sub: reg.id, iat: nowSeconds(), agent_key: thumbprint(reg.agent_jwk), principal,
+        iss: this.id, sub: reg.id, iat: nowSeconds(), agent_key: thumbprint(reg.agent_jwk), parent,
         depth: reg.depth, version: this.chainVersion(reg), records: reg.records, expires_at: reg.expires_at ?? null,
       },
       this.keys.signing,
@@ -617,7 +617,7 @@ export class Registry {
     const kid = header.kid ?? '';
     const allowed =
       kid === `registration:${reg.id}` ||
-      (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.root_principal) ||
+      (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.principal) ||
       (kid.startsWith('registration:') && this.ancestors(reg).some((a) => a.id === kid.slice('registration:'.length)));
     if (!allowed) throw new HttpError(403, 'not_authorized', 'only the agent or its chain may fetch its receipt');
     return { registration_id: reg.id, receipt: this.receiptFor(reg), version: this.chainVersion(reg) };
@@ -628,7 +628,7 @@ export class Registry {
     const reg = this.mustRegistration(registrationId);
     const kid = header.kid ?? '';
     const allowed =
-      (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.root_principal) ||
+      (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.principal) ||
       (kid.startsWith('registration:') && this.ancestors(reg).some((a) => a.id === kid.slice('registration:'.length)));
     if (!allowed) throw new HttpError(403, 'not_authorized', 'only the principal chain above this agent may rotate its key');
     const jwk = payload.agent_jwk;
@@ -641,7 +641,7 @@ export class Registry {
 
   // -------------------------------------------------------------------------
   // Transfer between principals: both sign; the relationship (and so every
-  // PPID) is new; the old principal stays answerable for what came before.
+  // ID) is new; the old principal stays answerable for what came before.
   // -------------------------------------------------------------------------
 
   async activeDescendants(reg) {
@@ -706,7 +706,7 @@ export class Registry {
     if (offer.subtree === 'end') {
       for (const d of descendants) if (d.status !== 'revoked') this.commit('registration.revoked', { id: d.id, reason: 'parent_transferred', by: `transfer:${offerId}` });
     }
-    // Old PPIDs (this agent's and every descendant's) are now "transferred"; tell peers holding sub-agents.
+    // Old IDs (this agent's and every descendant's) are now "transferred"; tell peers holding sub-agents.
     const peersNotified = await this.pushStatusChange([reg, ...descendants]);
     for (const principal of [offer.from, to.id]) {
       this.commit('notification.sent', {
@@ -722,13 +722,13 @@ export class Registry {
     };
   }
 
-  /** A parent agent registered at a peer registry proves itself with a PPID attestation addressed to us. */
+  /** A delegating agent registered at a peer directory proves itself with an ID attestation addressed to us. */
   async verifyRemoteParent(attestation, signerJwk) {
     if (!signerJwk) throw new HttpError(401, 'missing_key', 'remote parent must sign with its attested key');
     const { header, payload: unverified } = decodeJws(String(attestation).split('~')[0]);
     const iss = unverified.iss;
-    const peer = this.trust.registry(iss);
-    if (!peer || iss === this.id) throw new HttpError(403, 'untrusted_registry', `registry ${iss} is not a federation peer`);
+    const peer = this.trust.directory(iss);
+    if (!peer || iss === this.id) throw new HttpError(403, 'untrusted_directory', `directory ${iss} is not a federation peer`);
     let att;
     try {
       att = verifySdJwt(attestation, this.trust.signingKey(peer, header.kid), { typ: TYP.attestation }).payload;
@@ -736,7 +736,7 @@ export class Registry {
     } catch (err) {
       throw new HttpError(403, 'invalid_attestation', err.message);
     }
-    if (att.aud !== this.id) throw new HttpError(403, 'wrong_audience', 'attestation is not addressed to this registry');
+    if (att.aud !== this.id) throw new HttpError(403, 'wrong_audience', 'attestation is not addressed to this directory');
     if (att.exp < nowSeconds()) throw new HttpError(403, 'expired_attestation', 'parent attestation expired');
     if (thumbprint(att.cnf.jwk) !== thumbprint(signerJwk)) throw new HttpError(401, 'key_mismatch', 'request not signed by the attested key');
     const status = await this.remoteStatus(iss, att.sub);
@@ -747,8 +747,8 @@ export class Registry {
       throw new HttpError(400, 'chain_summary_required', 'the parent must disclose principal_type, assurance, verification_source and chain_length to this directory');
     }
     return {
-      link: { type: 'remote_agent', registry: iss, ppid: att.sub, reg_binding: att.reg_binding, cnf_thumbprint: thumbprint(signerJwk) },
-      rootSummary: { type: a.principal_type, assurance: a.assurance, verification_source: a.verification_source, registry: a.principal_directory ?? iss },
+      link: { type: 'remote_agent', directory: iss, aaf_id: att.sub, reg_binding: att.reg_binding, cnf_thumbprint: thumbprint(signerJwk) },
+      principalSummary: { type: a.principal_type, assurance: a.assurance, verification_source: a.verification_source, directory: a.principal_directory ?? iss },
       depth: a.chain_length + 1,
     };
   }
@@ -759,16 +759,16 @@ export class Registry {
     return r;
   }
 
-  /** Who may revoke: the root principal, any ancestor agent, the direct (remote) parent, or the operator. */
+  /** Who may revoke: the principal, any ancestor agent, the direct (remote) parent, or the operator. */
   async revoke(registrationId, { header, jwk, payload }) {
     const reg = this.mustRegistration(registrationId);
     const reason = payload.reason ?? 'principal_request';
     if (!REVOCATION_REASONS.includes(reason)) throw new HttpError(400, 'invalid_reason', `reason must be one of ${REVOCATION_REASONS.join(', ')}`);
     const kid = header.kid ?? '';
     let by = null;
-    if (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.root_principal) by = kid;
+    if (kid.startsWith('principal:') && kid.slice('principal:'.length) === reg.principal) by = kid;
     if (kid.startsWith('registration:') && this.ancestors(reg).some((a) => a.id === kid.slice('registration:'.length))) by = kid;
-    if (!by && reg.parent.type === 'remote_agent' && jwk && thumbprint(jwk) === reg.parent.cnf_thumbprint) by = `remote:${reg.parent.ppid}`;
+    if (!by && reg.parent.type === 'remote_agent' && jwk && thumbprint(jwk) === reg.parent.cnf_thumbprint) by = `remote:${reg.parent.aaf_id}`;
     if (!by) throw new HttpError(403, 'not_authorized', 'only the principal chain above this agent may revoke it');
     return this.applyRevocation(reg, reason, by);
   }
@@ -782,23 +782,23 @@ export class Registry {
   }
 
   /**
-   * Push: tell peer registries that hold sub-agents under these registrations
+   * Push: tell peer directories that hold sub-agents under these registrations
    * to drop cached status at once. Pull (bounded cache) remains the backstop if
    * a peer is unreachable, so propagation never exceeds statusCacheSeconds.
    */
   async pushStatusChange(regs) {
     const ids = new Set(regs.map((r) => r.id));
     const byPeer = new Map();
-    for (const [ppid, rec] of this.ppids) {
+    for (const [aaf_id, rec] of this.aaf_ids) {
       if (!ids.has(rec.registration)) continue;
-      const peer = this.trust.registry(rec.audience);
+      const peer = this.trust.directory(rec.audience);
       if (!peer || peer.id === this.id) continue;
-      byPeer.set(peer, [...(byPeer.get(peer) ?? []), ppid]);
+      byPeer.set(peer, [...(byPeer.get(peer) ?? []), aaf_id]);
     }
     const notified = [];
-    for (const [peer, ppids] of byPeer) {
+    for (const [peer, aaf_ids] of byPeer) {
       try {
-        await peerCall(this, `${peer.url}/v1/federation/status-changed`, { ppids });
+        await peerCall(this, `${peer.url}/v1/federation/status-changed`, { aaf_ids });
         notified.push(peer.id);
       } catch {
         // Peer unreachable: its cache expires within statusCacheSeconds.
@@ -807,9 +807,9 @@ export class Registry {
     return notified;
   }
 
-  statusChangedUpstream(peerId, ppids) {
+  statusChangedUpstream(peerId, aaf_ids) {
     let invalidated = 0;
-    for (const ppid of ppids) if (this.remoteStatusCache.delete(`${peerId}|${ppid}`)) invalidated++;
+    for (const aaf_id of aaf_ids) if (this.remoteStatusCache.delete(`${peerId}|${aaf_id}`)) invalidated++;
     return { invalidated };
   }
 
@@ -836,25 +836,25 @@ export class Registry {
       const up = await this.registrationStatus(this.registrations.get(parent.registration));
       if (up.status !== 'active') return { status: up.status, reason: `upstream:${up.reason}` };
     } else if (parent.type === 'remote_agent') {
-      const up = await this.remoteStatus(parent.registry, parent.ppid);
+      const up = await this.remoteStatus(parent.directory, parent.aaf_id);
       // A remote parent that changed hands ends this link; the new owner re-attaches sub-agents.
-      if (up.status === 'transferred') return { status: 'revoked', reason: `upstream(${parent.registry}):parent_transferred` };
-      if (up.status !== 'active') return { status: up.status, reason: `upstream(${parent.registry}):${up.reason}` };
+      if (up.status === 'transferred') return { status: 'revoked', reason: `upstream(${parent.directory}):parent_transferred` };
+      if (up.status !== 'active') return { status: up.status, reason: `upstream(${parent.directory}):${up.reason}` };
     }
     return { status: 'active' };
   }
 
-  /** Ask a federation peer for the status of a PPID it issued (cached briefly). */
-  async remoteStatus(registryId, ppid) {
-    const key = `${registryId}|${ppid}`;
+  /** Ask a federation peer for the status of an ID it issued (cached briefly). */
+  async remoteStatus(directoryId, aaf_id) {
+    const key = `${directoryId}|${aaf_id}`;
     const cached = this.remoteStatusCache.get(key);
     if (cached && cached.until > Date.now()) return cached.value;
-    const peer = this.trust.registry(registryId);
+    const peer = this.trust.directory(directoryId);
     let value;
     try {
-      const res = await postJson(`${peer.url}/v1/status`, { ppid });
+      const res = await postJson(`${peer.url}/v1/status`, { aaf_id });
       const { payload } = verifyJws(res.status_token, this.trust.signingKey(peer), { typ: TYP.status });
-      if (payload.sub !== ppid) throw new Error('status token for wrong ppid');
+      if (payload.sub !== aaf_id) throw new Error('status token for wrong aaf_id');
       value = { status: payload.status, reason: payload.reason };
     } catch (err) {
       return { status: 'unknown', reason: err instanceof ServiceError ? err.code : 'invalid_status_token' };
@@ -864,7 +864,7 @@ export class Registry {
   }
 
   // -------------------------------------------------------------------------
-  // PPIDs and accountability attestations
+  // IDs and accountability attestations
   // -------------------------------------------------------------------------
 
   /** One value per (registration, chain version, audience): a new principal relationship means new PPIDs. */
@@ -874,17 +874,17 @@ export class Registry {
   }
 
   rootOf(reg) {
-    if (reg.root_principal) {
-      const p = this.principals.get(reg.root_principal);
+    if (reg.principal) {
+      const p = this.principals.get(reg.principal);
       return { local: true, principal: p };
     }
-    return { local: false, summary: reg.root_summary };
+    return { local: false, summary: reg.principal_summary };
   }
 
   async issueAttestation(registrationId, { audience, mode = 'pairwise', cnf_jwk: cnfJwk }) {
     const reg = this.mustRegistration(registrationId);
     if (!audience) throw new HttpError(400, 'missing_audience', 'audience is required');
-    if (!['pairwise', 'ephemeral'].includes(mode)) throw new HttpError(400, 'invalid_mode', 'mode must be pairwise or ephemeral');
+    if (!['pairwise', 'unlinkable'].includes(mode)) throw new HttpError(400, 'invalid_mode', 'mode must be pairwise or unlinkable');
     if (!cnfJwk || cnfJwk.crv !== 'Ed25519') throw new HttpError(400, 'invalid_cnf', 'cnf_jwk must be an Ed25519 public JWK');
     if (thumbprint(cnfJwk) === thumbprint(reg.agent_jwk)) {
       throw new HttpError(400, 'correlatable_key', 'presentation key must differ from the long-term agent key');
@@ -895,22 +895,22 @@ export class Registry {
 
     const now = nowSeconds();
     const version = this.chainVersion(reg);
-    // Whoever is accountable for conduct under this PPID, fixed at issuance.
-    const rootSnapshot = reg.root_principal ? { principal: reg.root_principal } : { remote: reg.parent.type === 'remote_agent' ? reg.parent.registry : null };
+    // Whoever is accountable for conduct under this ID, fixed at issuance.
+    const rootSnapshot = reg.principal ? { principal: reg.principal } : { remote: reg.parent.type === 'remote_agent' ? reg.parent.directory : null };
     const expiry = this.effectiveExpiry(reg);
     const exp = Math.min(now + this.policies.attestationTtlSeconds, expiry != null ? Math.floor(expiry / 1000) : Infinity);
-    let ppid;
+    let aaf_id;
     let sealedRef;
     let statusIdx;
     if (mode === 'pairwise') {
-      ppid = this.pairwisePpid(reg.id, version, audience);
-      if (!this.ppids.has(ppid)) this.commit('ppid.issued', { ppid, registration: reg.id, audience, version, root: rootSnapshot, status_idx: allocateIndex(this.statusIndex) });
-      statusIdx = this.ppids.get(ppid).status_idx;
+      aaf_id = this.pairwisePpid(reg.id, version, audience);
+      if (!this.aaf_ids.has(aaf_id)) this.commit('aaf_id.issued', { aaf_id, registration: reg.id, audience, version, root: rootSnapshot, status_idx: allocateIndex(this.statusIndex) });
+      statusIdx = this.aaf_ids.get(aaf_id).status_idx;
     } else {
-      ppid = `${ID_PREFIX}:${this.host}:e_${base32(randomBytes(16)).slice(0, 26)}`;
-      sealedRef = sealJwe({ ppid, registration: reg.id, audience, version, root: rootSnapshot, iat: now }, this.keys.encryption.publicJwk);
+      aaf_id = `${ID_PREFIX}:${this.host}:u_${base32(randomBytes(16)).slice(0, 26)}`;
+      sealedRef = sealJwe({ aaf_id, registration: reg.id, audience, version, root: rootSnapshot, iat: now }, this.keys.encryption.publicJwk);
       statusIdx = allocateIndex(this.statusIndex);
-      this.rememberEphemeral({ idx: statusIdx, ephemeral: true, registration: reg.id, version, exp });
+      this.rememberUnlinkable({ idx: statusIdx, unlinkable: true, registration: reg.id, version, exp });
     }
 
     // Everything about the principal and the chain is selectively disclosable:
@@ -952,21 +952,21 @@ export class Registry {
       if (sum.type) claims.principal_type = sd(sum.type);
       if (sum.assurance) claims.assurance = sd(sum.assurance);
       if (sum.verification_source) claims.verification_source = sd(sum.verification_source);
-      if (sum.registry) claims.principal_directory = sd(sum.registry);
+      if (sum.directory) claims.principal_directory = sd(sum.directory);
     }
 
     const payload = {
       vct: vct(this.trust.trustAnchor.entity_id, 'accountability'),
       iss: this.id,
-      sub: ppid,
+      sub: aaf_id,
       aud: audience,
       iat: now,
       exp,
       jti: randomId('att', 12),
       cnf: { jwk: publicOf(cnfJwk) },
-      // pairwise: a PPID, at most one per agent and counterparty; ephemeral: single-use.
+      // pairwise: a PPID, at most one per agent and counterparty; unlinkable: single-use.
       id_mode: mode,
-      reg_binding: regBinding(reg.id, version, ppid),
+      reg_binding: regBinding(reg.id, version, aaf_id),
       // The directory's statement: this ID resolves to a principal it verified under its published practices.
       accountability: sdPad({ status: 'accountable', ...claims, chain_length: sd(reg.depth), attributes: sdPad(attributes, PAD.attributes) }, PAD.claims),
       records: sdPad(reg.records.map((r) => sd(r)), PAD.records),
@@ -974,78 +974,78 @@ export class Registry {
       ...(sealedRef ? { sealed_ref: sealedRef } : {}),
     };
     const attestation = issueSdJwt(payload, this.keys.signing, { typ: TYP.attestation });
-    return { ppid, mode, attestation, expires_at: payload.exp };
+    return { aaf_id, mode, attestation, expires_at: payload.exp };
   }
 
-  /** Map a PPID (plus sealed reference for ephemeral PPIDs) to a registration, the chain version and the root at issuance. */
-  locate(ppid, sealedRef) {
-    if (registryOfPpid(ppid) !== this.host) throw new HttpError(400, 'foreign_ppid', `this ID was not issued by ${this.id}`);
-    if (ppid.includes(':p_')) {
-      const rec = this.ppids.get(ppid);
-      if (!rec) throw new HttpError(404, 'unknown_ppid', 'ID not recognized');
+  /** Map an ID (plus sealed reference for unlinkable IDs) to a registration, the chain version and the root at issuance. */
+  locate(aaf_id, sealedRef) {
+    if (directoryOfId(aaf_id) !== this.host) throw new HttpError(400, 'foreign_id', `this ID was not issued by ${this.id}`);
+    if (aaf_id.includes(':p_')) {
+      const rec = this.aaf_ids.get(aaf_id);
+      if (!rec) throw new HttpError(404, 'unknown_id', 'ID not recognized');
       return { registration: this.registrations.get(rec.registration), audience: rec.audience, version: rec.version ?? 0, root: rec.root, issuedAt: rec.issued_at };
     }
-    if (!sealedRef) throw new HttpError(400, 'sealed_ref_required', 'single-use IDs resolve only with the sealed reference the counterparty kept');
+    if (!sealedRef) throw new HttpError(400, 'sealed_ref_required', 'unlinkable IDs can be traced only with the sealed reference the counterparty kept');
     let opened;
     try {
       opened = openJwe(sealedRef, this.keys.encryption.privateJwk).payload;
     } catch {
       throw new HttpError(400, 'invalid_sealed_ref', 'sealed reference could not be opened');
     }
-    if (opened.ppid !== ppid) throw new HttpError(400, 'sealed_ref_mismatch', 'sealed reference belongs to a different ID');
+    if (opened.aaf_id !== aaf_id) throw new HttpError(400, 'sealed_ref_mismatch', 'sealed reference belongs to a different ID');
     return { registration: this.registrations.get(opened.registration), audience: opened.audience, version: opened.version ?? 0, root: opened.root, issuedAt: new Date(opened.iat * 1000).toISOString() };
   }
 
-  /** Status of one PPID: a PPID from before a change of hands is "transferred", whatever the agent's status now. */
-  async ppidStatus(located) {
+  /** Status of one ID: an ID from before a change of hands is "transferred", whatever the agent's status now. */
+  async idStatus(located) {
     const s = await this.registrationStatus(located.registration);
     if (s.status === 'active' && located.version !== this.chainVersion(located.registration)) return { status: 'transferred', reason: 'custody_transferred' };
     return s;
   }
 
-  async status({ ppid, sealed_ref: sealedRef }) {
-    const s = await this.ppidStatus(this.locate(ppid, sealedRef));
+  async status({ aaf_id, sealed_ref: sealedRef }) {
+    const s = await this.idStatus(this.locate(aaf_id, sealedRef));
     const token = signJws(
-      { iss: this.id, sub: ppid, status: s.status, reason: s.reason ?? null, revoked_at: s.at ?? null, checked_at: new Date().toISOString(), iat: nowSeconds() },
+      { iss: this.id, sub: aaf_id, status: s.status, reason: s.reason ?? null, revoked_at: s.at ?? null, checked_at: new Date().toISOString(), iat: nowSeconds() },
       this.keys.signing,
       { typ: TYP.status },
     );
-    return { ppid, status: s.status, reason: s.reason ?? null, status_token: token };
+    return { aaf_id, status: s.status, reason: s.reason ?? null, status_token: token };
   }
 
   // -------------------------------------------------------------------------
-  // Incidents: the registry relays to the principal without revealing it
+  // Incidents: the directory relays to the principal without revealing it
   // -------------------------------------------------------------------------
 
   async incident({ header, payload, thumbprint: reporterKey }) {
-    const { ppid, sealed_ref: sealedRef, reporter, summary, evidence = [] } = payload;
-    const located = this.locate(ppid, sealedRef);
+    const { aaf_id, sealed_ref: sealedRef, reporter, summary, evidence = [] } = payload;
+    const located = this.locate(aaf_id, sealedRef);
     const { registration } = located;
-    const forwardedBy = (header.kid ?? '').startsWith('registry:') ? header.kid.slice('registry:'.length) : null;
+    const forwardedBy = (header.kid ?? '').startsWith('directory:') ? header.kid.slice('directory:'.length) : null;
     const id = randomId('inc', 10);
-    this.commit('incident.reported', { id, ppid, registration: registration.id, reporter, reporter_key: reporterKey, forwarded_by: forwardedBy, summary, evidence });
+    this.commit('incident.reported', { id, aaf_id, registration: registration.id, reporter, reporter_key: reporterKey, forwarded_by: forwardedBy, summary, evidence });
     let principalNotified = false;
     let top = registration;
     while (top.parent.type === 'agent') top = this.registrations.get(top.parent.registration);
     if (located.root?.principal) {
-      // The principal accountable when the PPID was issued, and the current one if the agent has since changed hands.
-      for (const principal of new Set([located.root.principal, registration.root_principal].filter(Boolean))) {
+      // The principal accountable when the ID was issued, and the current one if the agent has since changed hands.
+      for (const principal of new Set([located.root.principal, registration.principal].filter(Boolean))) {
         this.commit('notification.sent', {
           principal,
           notification: {
             kind: 'incident', incident_id: id, registration_id: registration.id, agent_label: registration.label,
-            reporter, forwarded_by: forwardedBy, summary, ppid, about_prior_custody: principal !== located.root.principal,
+            reporter, forwarded_by: forwardedBy, summary, aaf_id, about_prior_custody: principal !== located.root.principal,
           },
         });
       }
       principalNotified = true;
     } else if (top.parent.type === 'remote_agent') {
-      // The root principal is registered with a peer: relay through it, naming
-      // the parent agent's PPID there. The reporter learns nothing new.
-      const peer = this.trust.registry(top.parent.registry);
+      // The principal is registered with a peer: relay through it, naming
+      // the delegating agent's ID there. The reporter learns nothing new.
+      const peer = this.trust.directory(top.parent.directory);
       try {
         const res = await peerCall(this, `${peer.url}/v1/incidents`, {
-          ppid: top.parent.ppid,
+          aaf_id: top.parent.aaf_id,
           reporter,
           summary: `[relayed by ${this.id} about sub-agent ${registration.label ?? registration.id}] ${summary}`,
           evidence,
@@ -1059,13 +1059,13 @@ export class Registry {
   }
 
   // -------------------------------------------------------------------------
-  // Resolution under legal process
+  // Attribution under legal process
   // -------------------------------------------------------------------------
 
   verifyOrder(order) {
     const { payload: unverified, header } = decodeJws(order);
-    const authority = this.trust.authority(unverified.iss, 'resolution-authority');
-    if (!authority) throw new HttpError(403, 'untrusted_authority', `${unverified.iss} is not a recognized resolution authority`);
+    const authority = this.trust.authority(unverified.iss, 'designated-authority');
+    if (!authority) throw new HttpError(403, 'untrusted_authority', `${unverified.iss} is not a recognized designated authority`);
     let payload;
     try {
       payload = verifyJws(order, this.trust.signingKey(authority, header.kid), { typ: TYP.order }).payload;
@@ -1076,30 +1076,30 @@ export class Registry {
     return { payload, authority };
   }
 
-  async resolve({ order, ppid, sealed_ref: sealedRef, forward }) {
+  async trace({ order, aaf_id, sealed_ref: sealedRef, forward }) {
     const { payload: ord, authority } = this.verifyOrder(order);
-    let subjectPpid = ppid;
+    let subjectId = aaf_id;
     let forwardedBy = null;
     if (forward) {
       const { payload: unverified } = decodeJws(forward);
-      const peer = this.trust.registry(unverified.iss);
-      if (!peer) throw new HttpError(403, 'untrusted_registry', 'forwarding registry is not a federation peer');
+      const peer = this.trust.directory(unverified.iss);
+      if (!peer) throw new HttpError(403, 'untrusted_directory', 'forwarding directory is not a federation peer');
       const { payload: fwd } = verifyJws(forward, this.trust.signingKey(peer), { typ: TYP.forward });
-      if (fwd.order_digest !== sha256b64u(order) || fwd.ppid !== ppid) throw new HttpError(403, 'invalid_forward', 'forwarding statement does not match');
-      subjectPpid = fwd.subject_ppid;
+      if (fwd.order_digest !== sha256b64u(order) || fwd.aaf_id !== aaf_id) throw new HttpError(403, 'invalid_forward', 'forwarding statement does not match');
+      subjectId = fwd.subject_id;
       forwardedBy = peer.id;
     }
-    if (!ord.ppids.includes(subjectPpid)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
+    if (!ord.aaf_ids.includes(subjectId)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
 
-    const located = this.locate(ppid, sealedRef);
+    const located = this.locate(aaf_id, sealedRef);
     const { registration } = located;
-    const ppidStatus = await this.ppidStatus(located);
+    const idStatus = await this.idStatus(located);
     const chain = [];
     let cur = registration;
     while (cur) {
       const s = await this.registrationStatus(cur);
       chain.push({
-        registry: this.id, registration_id: cur.id, label: cur.label, status: s.status, reason: s.reason ?? null,
+        directory: this.id, registration_id: cur.id, label: cur.label, status: s.status, reason: s.reason ?? null,
         created_at: cur.created_at, revoked_at: cur.revocation?.at ?? null, expires_at: cur.expires_at ?? null, provider: cur.provider,
         ...(cur.custody?.length > 1 ? { custody: cur.custody.map((c) => ({ principal: this.principals.get(c.principal)?.identity.legal_name, from: c.from, to: c.to })) } : {}),
       });
@@ -1107,67 +1107,67 @@ export class Registry {
     }
     const top = chain.length ? this.registrations.get(chain[chain.length - 1].registration_id) : registration;
 
-    let rootPrincipal = null;
+    let principal = null;
     let upstream = null;
     if (located.root?.principal) {
-      // The principal accountable for conduct under this PPID: the one in place when it was issued.
+      // The principal accountable for conduct under this ID: the one in place when it was issued.
       const p = this.principals.get(located.root.principal);
-      rootPrincipal = {
+      principal = {
         principal_id: p.id, type: p.type, identity: p.identity, contact: p.contact,
         verification: { verifier: p.verification.verifier, trust_framework: p.verification.trust_framework, assurance_level: p.verification.assurance_level, time: p.verification.time, verification_process: p.verification.verification_process, evidence: p.verification.evidence },
-        registry: this.id,
+        directory: this.id,
       };
     } else if (top.parent.type === 'remote_agent') {
-      const peer = this.trust.registry(top.parent.registry);
+      const peer = this.trust.directory(top.parent.directory);
       const fwd = signJws(
-        { iss: this.id, aud: peer.id, order_digest: sha256b64u(order), ppid: top.parent.ppid, subject_ppid: subjectPpid, iat: nowSeconds() },
+        { iss: this.id, aud: peer.id, order_digest: sha256b64u(order), aaf_id: top.parent.aaf_id, subject_id: subjectId, iat: nowSeconds() },
         this.keys.signing,
         { typ: TYP.forward },
       );
-      upstream = await postJson(`${peer.url}/v1/resolutions`, { order, ppid: top.parent.ppid, forward: fwd });
+      upstream = await postJson(`${peer.url}/v1/attributions`, { order, aaf_id: top.parent.aaf_id, forward: fwd });
       chain.push(...upstream.result.chain);
-      rootPrincipal = upstream.result.root_principal;
+      principal = upstream.result.principal;
     }
 
     let related = [];
-    if (ord.scope?.includes('related_ppids') && ord.relying_party && rootPrincipal?.registry === this.id) {
-      related = [...this.ppids.entries()]
-        .filter(([, v]) => v.audience === ord.relying_party && v.root?.principal === rootPrincipal.principal_id)
+    if (ord.scope?.includes('related_ids') && ord.counterparty && principal?.directory === this.id) {
+      related = [...this.aaf_ids.entries()]
+        .filter(([, v]) => v.audience === ord.counterparty && v.root?.principal === principal.principal_id)
         .map(([k]) => k);
     }
 
     const id = randomId('res', 10);
-    this.commit('resolution.performed', {
-      id, authority: authority.id, case: ord.case, ppid, forwarded_by: forwardedBy, scope: ord.scope ?? [], requester: ord.requester ?? null,
+    this.commit('attribution.performed', {
+      id, authority: authority.id, case: ord.case, aaf_id, forwarded_by: forwardedBy, scope: ord.scope ?? [], requester: ord.requester ?? null,
     });
-    if (ord.notify_principal !== false && rootPrincipal?.registry === this.id) {
+    if (ord.notify_principal !== false && principal?.directory === this.id) {
       this.commit('notification.sent', {
-        principal: rootPrincipal.principal_id,
-        notification: { kind: 'resolution', resolution_id: id, authority: authority.id, case: ord.case, registration_id: registration.id, agent_label: registration.label },
+        principal: principal.principal_id,
+        notification: { kind: 'attribution', attribution_id: id, authority: authority.id, case: ord.case, registration_id: registration.id, agent_label: registration.label },
       });
     }
 
     const result = {
-      resolution_id: id, ppid, ppid_status: ppidStatus.status, ppid_issued_at: located.issuedAt ?? null, authority: authority.id, case: ord.case,
-      root_principal: rootPrincipal, current_principal: registration.root_principal && registration.root_principal !== rootPrincipal?.principal_id
-        ? { principal_id: registration.root_principal, legal_name: this.principals.get(registration.root_principal).identity.legal_name } : undefined,
-      chain, related_ppids: related,
+      attribution_id: id, aaf_id, id_status: idStatus.status, id_issued_at: located.issuedAt ?? null, authority: authority.id, case: ord.case,
+      principal: principal, current_principal: registration.principal && registration.principal !== principal?.principal_id
+        ? { principal_id: registration.principal, legal_name: this.principals.get(registration.principal).identity.legal_name } : undefined,
+      chain, related_ids: related,
     };
-    return { result, token: signJws({ iss: this.id, iat: nowSeconds(), ...result }, this.keys.signing, { typ: TYP.resolution }) };
+    return { result, token: signJws({ iss: this.id, iat: nowSeconds(), ...result }, this.keys.signing, { typ: TYP.attribution }) };
   }
 
   /**
-   * Revocation under a legal order (RV-1): a recognized authority may require
+   * Revocation under a legal order (RV-1): a designated authority may require
    * this directory to revoke the registration behind an ID. The order must name
    * the ID and carry the revoke_registration scope. An ID from before a change
    * of hands names a relationship that has already ended, so there is nothing
    * to revoke under it.
    */
-  async revokeUnderOrder({ order, ppid, sealed_ref: sealedRef }) {
+  async revokeUnderOrder({ order, aaf_id, sealed_ref: sealedRef }) {
     const { payload: ord, authority } = this.verifyOrder(order);
-    if (!ord.ppids?.includes(ppid)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
+    if (!ord.aaf_ids?.includes(aaf_id)) throw new HttpError(403, 'not_covered', 'the order does not cover this ID');
     if (!ord.scope?.includes(ORDER_SCOPE_REVOKE)) throw new HttpError(403, 'not_in_scope', `the order does not include the ${ORDER_SCOPE_REVOKE} scope`);
-    const located = this.locate(ppid, sealedRef);
+    const located = this.locate(aaf_id, sealedRef);
     const { registration } = located;
     if (located.version !== this.chainVersion(registration)) {
       throw new HttpError(409, 'custody_changed', 'this ID belongs to a principal–agent relationship that has already ended; the agent now answers to a different principal');
@@ -1179,40 +1179,40 @@ export class Registry {
       const peersNotified = await this.pushStatusChange([registration, ...descendants]);
       res = { registration_id: registration.id, status: 'revoked', reason: 'legal_order', cascades_to: descendants.length, peers_notified: peersNotified };
     }
-    if (!res.already && ord.notify_principal !== false && registration.root_principal) {
+    if (!res.already && ord.notify_principal !== false && registration.principal) {
       this.commit('notification.sent', {
-        principal: registration.root_principal,
+        principal: registration.principal,
         notification: { kind: 'revocation_order', authority: authority.id, case: ord.case, registration_id: registration.id, agent_label: registration.label },
       });
     }
-    return { ...res, ppid, authority: authority.id, case: ord.case };
+    return { ...res, aaf_id, authority: authority.id, case: ord.case };
   }
 
   // -------------------------------------------------------------------------
-  // Accreditation of record keepers: OpenID Federation Trust Marks, one per
-  // role, issued only for types the Trust Anchor lets this registry issue.
+  // Accreditation of records services: OpenID Federation Trust Marks, one per
+  // role, issued only for types the Trust Anchor lets this directory issue.
   // -------------------------------------------------------------------------
 
-  accredit(rkId) {
-    const rk = this.trust.recordKeeper(rkId);
-    if (!rk) throw new HttpError(404, 'unknown_record_keeper', `${rkId} is not a member of the federation`);
-    const existing = this.accreditations.get(rkId);
+  accredit(rsId) {
+    const rs = this.trust.recordsService(rsId);
+    if (!rs) throw new HttpError(404, 'unknown_records_service', `${rsId} is not a member of the federation`);
+    const existing = this.accreditations.get(rsId);
     if (existing?.status === 'active') return { trust_marks: Object.entries(existing.marks).map(([t, m]) => ({ trust_mark_type: t, trust_mark: m })), already: true };
     const marks = {};
-    for (const role of rk.roles) {
+    for (const role of rs.roles) {
       const type = trustMarkType(this.trust.trustAnchor.entity_id, role);
       if (!this.trust.trustMarkIssuers(type).includes(this.id)) continue;
-      marks[type] = issueTrustMark({ issuer: this.id, key: this.keys.signing, sub: rkId, type });
+      marks[type] = issueTrustMark({ issuer: this.id, key: this.keys.signing, sub: rsId, type });
     }
-    if (!Object.keys(marks).length) throw new HttpError(403, 'not_a_trust_mark_issuer', `${this.id} may not accredit ${rkId}`);
-    const roles = rk.roles.filter((r) => marks[trustMarkType(this.trust.trustAnchor.entity_id, r)]);
-    this.commit('accreditation.granted', { rk: rkId, roles, marks });
+    if (!Object.keys(marks).length) throw new HttpError(403, 'not_a_trust_mark_issuer', `${this.id} may not accredit ${rsId}`);
+    const roles = rs.roles.filter((r) => marks[trustMarkType(this.trust.trustAnchor.entity_id, r)]);
+    this.commit('accreditation.granted', { rs: rsId, roles, marks });
     return { trust_marks: Object.entries(marks).map(([t, m]) => ({ trust_mark_type: t, trust_mark: m })) };
   }
 
-  withdrawAccreditation(rkId) {
-    this.commit('accreditation.withdrawn', { rk: rkId });
-    return { rk: rkId, status: 'withdrawn' };
+  withdrawAccreditation(rsId) {
+    this.commit('accreditation.withdrawn', { rs: rsId });
+    return { rs: rsId, status: 'withdrawn' };
   }
 
   /** The current Trust Mark of a type for a subject, or null if none or withdrawn. */
@@ -1223,7 +1223,7 @@ export class Registry {
   }
 
   // -------------------------------------------------------------------------
-  // Transparency: public, redacted view of the registry's own log
+  // Transparency: public, redacted view of the directory's own log
   // -------------------------------------------------------------------------
 
   transparencyEntries(start = 0, end = this.log.size) {
@@ -1243,10 +1243,10 @@ export class Registry {
       registrations: regs.length,
       active_registrations: regs.filter((r) => r.status === 'active').length,
       revoked_registrations: regs.filter((r) => r.status === 'revoked').length,
-      pairwise_ppids: this.ppids.size,
+      pairwise_ppids: this.aaf_ids.size,
       transfers: [...this.transferOffers.values()].filter((o) => o.status === 'accepted').length,
       incidents: this.incidents.size,
-      accreditations: [...this.accreditations.values()].filter((a) => a.status === 'active').map((a) => a.rk),
+      accreditations: [...this.accreditations.values()].filter((a) => a.status === 'active').map((a) => a.rs),
       log_size: this.log.size,
     };
   }

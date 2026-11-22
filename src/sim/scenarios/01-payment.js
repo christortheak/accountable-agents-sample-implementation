@@ -23,7 +23,7 @@ export default {
       method: 'government ID + liveness check',
     });
     n.act('Dana Whitfield', `enrolls with ${regA.name} as a natural person`);
-    n.act('VerityCheck (identity verifier)', `verifies her identity at IAL2; the registry records it (principal ${short(dana.id, 16)})`);
+    n.act('VerityCheck (identity verifier)', `verifies her identity at IAL2; the directory records it (principal ${short(dana.id, 16)})`);
     n.note('In practice this takes minutes to days. It happens once; every later agent registration reuses it.');
     n.expect(dana.verification.verification === 'verified', 'principal verified before any agent is registered');
 
@@ -36,7 +36,7 @@ export default {
         { type: 'framework', name: 'acme-agent-runtime', version: '4.2.0' },
         { type: 'tool', name: 'checkout-browser', version: '1.9.3' },
       ],
-      incidentResponse: { contact: 'security@acme-agents.example', constrain_endpoint: 'https://acme-agents.example/agents/constrain', notify_principal_via: 'registry' },
+      incidentResponse: { contact: 'security@acme-agents.example', constrain_endpoint: 'https://acme-agents.example/agents/constrain', notify_principal_via: 'directory' },
     });
     n.act('Acme Agents', `deposits the ShopBot 2.3.1 bill of materials with ${ledgerline.name} → ${provenanceId}`);
     n.note('One provenance record serves every agent running this build, so pointing to it does not single out any one agent.');
@@ -49,7 +49,7 @@ export default {
 
     n.step('Dana grants authority; the grant is deposited as an authorization record');
     await dana.grant(shopbot, {
-      rk: ledgerline,
+      rs: ledgerline,
       permissions: [
         { action: 'commerce.purchase', constraints: { max_amount: money(500), categories: ['electronics', 'books', 'home'] } },
         { action: 'payments.authorize', constraints: { max_amount: money(500) } },
@@ -62,24 +62,24 @@ export default {
     n.act('Dana', 'signs a grant: purchases ≤ $500 (electronics, books, home), payments ≤ $500, rail tickets ≤ $200; no subscriptions; 30 days; no further delegation');
     n.act('Ledgerline Records', 'verifies her signature against her registration and keeps the grant for her');
 
-    const gadgetBarn = await world.relyingParty({
+    const gadgetBarn = await world.counterparty({
       id: 'gadgetbarn.example', name: 'Gadget Barn',
       rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] },
       handlers: { 'commerce.purchase': async (p) => ({ order: `GB-${Math.floor(Math.random() * 1e6)}`, item: p.item }) },
     });
-    const bookNook = await world.relyingParty({
+    const bookNook = await world.counterparty({
       id: 'booknook.example', name: 'Book Nook',
       rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] },
       handlers: { 'commerce.purchase': async (p) => ({ order: `BN-${Math.floor(Math.random() * 1e6)}`, item: p.item }) },
     });
     const sarCandidates = [];
-    const bank = await world.relyingParty({
+    const bank = await world.counterparty({
       id: 'firstledger.bank.example', name: 'First Ledger Bank',
       // A regulated business sets acceptance criteria: a person or organization proofed to a stated level, with a short chain.
       rules: { 'payments.authorize': [{ label: 'BSA-covered payment', require: { accountability: 'established', authorization: true, principalType: ['natural_person', 'legal_person'], assurance: ['IAL2', 'IAL3', 'high'], maxChainLength: 2 } }] },
       handlers: { 'payments.authorize': async (p) => ({ payment: `PAY-${Math.floor(Math.random() * 1e6)}`, payee: p.payee }) },
       onDecision: ({ decision, evidence }) => {
-        if (decision.decision !== 'allow' && evidence.ppid) {
+        if (decision.decision !== 'allow' && evidence.aaf_id) {
           const detected = new Date();
           sarCandidates.push({ evidence, detected, fileBy: new Date(detected.getTime() + 30 * 86400000) });
         }
@@ -94,27 +94,27 @@ export default {
     n.learned('Gadget Barn', whatWasLearned(gadgetBarn.evidence.at(-1)));
     n.expect(buy1.decision === 'allow' && buy1.classification === 'ACCOUNTABLE_PROTECTED', 'purchase accepted from an accountable agent whose principal stays private');
     n.expect(gadgetBarn.evidence.at(-1).authority_relied_on.length === 1, 'merchant saw only the purchasing permission, not the payment or travel authority');
-    n.expect(gadgetBarn.evidence.at(-1).root.type === null && gadgetBarn.evidence.at(-1).chain_length === null, 'the merchant did not ask what kind of principal it is or how it was verified, so it was not told');
+    n.expect(gadgetBarn.evidence.at(-1).principal.type === null && gadgetBarn.evidence.at(-1).chain_length === null, 'the merchant did not ask what kind of principal it is or how it was verified, so it was not told');
 
     n.step('ShopBot asks First Ledger Bank to pay the merchant');
     const pay1 = await shopbot.act(bank.url, 'payments.authorize', { payee: 'gadgetbarn.example', amount: money(129) });
     n.decision('First Ledger Bank', pay1);
     const bankEv = bank.evidence.at(-1);
     n.say('The bank keeps a BSA-ready record of what it relied on:');
-    n.detail('PPID presented', short(bankEv.ppid, 48));
-    n.detail('what it asked the agent to show', `${bankEv.root.type}, proofed to ${bankEv.root.assurance}, ${bankEv.chain_length} link(s), vouched for by ${bankEv.registry}`);
+    n.detail('PPID presented', short(bankEv.aaf_id, 48));
+    n.detail('what it asked the agent to show', `${bankEv.principal.type}, proofed to ${bankEv.principal.assurance}, ${bankEv.chain_length} link(s), vouched for by ${bankEv.directory}`);
     n.detail('profile relied upon', bankEv.authority_relied_on.map(describePermission).join('; '));
     n.detail('signed status tokens retained', bankEv.status_tokens.length);
     n.detail('disposition', bankEv.decision);
     const rv = world.verifyReceipt(bankEv.activity_receipt);
     n.detail('activity-log receipt', `${bankEv.activity_receipt.log_id} #${bankEv.activity_receipt.index}, inclusion proof ${rv.ok ? 'verified' : 'FAILED'}`);
-    n.expect(pay1.decision === 'allow' && rv.ok && bankEv.root.assurance === 'IAL2', 'payment accepted on the bank\'s criteria (kind of principal, assurance level, chain length); it holds a verifiable receipt for its log entry');
+    n.expect(pay1.decision === 'allow' && rv.ok && bankEv.principal.assurance === 'IAL2', 'payment accepted on the bank\'s criteria (kind of principal, assurance level, chain length); it holds a verifiable receipt for its log entry');
 
     n.step('ShopBot shops at a second merchant, Book Nook');
     const buy2 = await shopbot.act(bookNook.url, 'commerce.purchase', { item: 'The Federalist Papers', amount: money(38), category: 'books' });
     n.decision('Book Nook', buy2);
     n.expect(buy2.decision === 'allow', 'second merchant accepts');
-    n.expect(buy2.ppid !== buy1.ppid, `different PPID at each merchant (${short(buy1.ppid.split(':').pop(), 10)} vs ${short(buy2.ppid.split(':').pop(), 10)})`);
+    n.expect(buy2.aaf_id !== buy1.aaf_id, `different PPID at each merchant (${short(buy1.aaf_id.split(':').pop(), 10)} vs ${short(buy2.aaf_id.split(':').pop(), 10)})`);
 
     n.step('Can the two merchants tell they served the same agent?');
     const publicValues = publicValuesOf(world.trust, [gadgetBarn.id, bookNook.id, bank.id]);
@@ -123,9 +123,9 @@ export default {
     n.say('Each party pools everything it received (identifiers, keys, signatures, salts, digests, timestamps) and compares.');
     n.detail('values shared by Gadget Barn and Book Nook', shared.length ? shared.map((s) => s.whereA).join(', ') : 'none');
     n.detail('values shared by Gadget Barn and the bank', sharedBank.length ? sharedBank.map((s) => s.whereA).join(', ') : 'none');
-    n.expect(shared.length === 0 && sharedBank.length === 0, 'nothing presented to one relying party can be matched against another');
+    n.expect(shared.length === 0 && sharedBank.length === 0, 'nothing presented to one counterparty can be matched against another');
     const again = await shopbot.act(gadgetBarn.url, 'commerce.purchase', { item: 'USB-C cable', amount: money(12), category: 'electronics' });
-    n.expect(again.ppid === buy1.ppid, 'Gadget Barn recognizes the same agent on a return visit (pairwise PPIDs are stable per relying party)');
+    n.expect(again.aaf_id === buy1.aaf_id, 'Gadget Barn recognizes the same agent on a return visit (pairwise PPIDs are stable per counterparty)');
 
     n.step('Failure variant 1: a transaction above the authorized limit');
     const big = await shopbot.act(gadgetBarn.url, 'commerce.purchase', { item: 'Gaming laptop', amount: money(899), category: 'electronics' });
@@ -142,24 +142,24 @@ export default {
     n.act('Dana', `reports her phone stolen and revokes ShopBot (reason: compromised) → ${rev.status}`);
     const after = await shopbot.act(bookNook.url, 'commerce.purchase', { item: 'Paperback', amount: money(15), category: 'books' });
     n.decision('Book Nook', after);
-    n.note(`Live status checks see revocation immediately. A relying party that skips them stops accepting the attestation when it expires, within ${world.trust.policies.attestationTtlSeconds}s.`);
+    n.note(`Live status checks see revocation immediately. A counterparty that skips them stops accepting the attestation when it expires, within ${world.trust.policies.attestationTtlSeconds}s.`);
     n.expect(after.decision === 'deny' && after.classification === 'REVOKED', 'post-revocation transaction refused');
 
-    n.step('A regulator with legal authority resolves the SAR subject');
+    n.step('A regulator with legal authority traces the SAR subject');
     const order = world.regulator.order({
-      caseId: 'SAR-2026-10-4471', ppids: [sar.evidence.ppid], relyingParty: bank.id, requester: 'First Ledger Bank (SAR filer)',
+      caseId: 'SAR-2026-10-4471', aaf_ids: [sar.evidence.aaf_id], counterparty: bank.id, requester: 'First Ledger Bank (SAR filer)',
       notifyPrincipal: false, purpose: '31 U.S.C. 5318(g) follow-up',
     });
-    const resolution = await world.regulator.resolve(regA, { order, ppid: sar.evidence.ppid });
-    const rp = resolution.result.root_principal;
+    const attribution = await world.regulator.trace(regA, { order, aaf_id: sar.evidence.aaf_id });
+    const principal = attribution.result.principal;
     n.act('Regulator', `presents order SAR-2026-10-4471 to ${regA.name}`);
-    n.detail('root principal', `${rp.identity.legal_name} (${rp.type}), ${rp.identity.jurisdiction}`);
-    n.detail('verification evidence (OpenID verified_claims)', `${rp.verification.verifier}: ${describeVerification(rp.verification)}, process ${rp.verification.verification_process}`);
-    n.detail('chain', resolution.result.chain.map((c) => `${c.label} [${c.status}${c.reason ? `: ${c.reason}` : ''}]`).join(' → '));
+    n.detail('principal', `${principal.identity.legal_name} (${principal.type}), ${principal.identity.jurisdiction}`);
+    n.detail('verification evidence (OpenID verified_claims)', `${principal.verification.verifier}: ${describeVerification(principal.verification)}, process ${principal.verification.verification_process}`);
+    n.detail('chain', attribution.result.chain.map((c) => `${c.label} [${c.status}${c.reason ? `: ${c.reason}` : ''}]`).join(' → '));
     const notes = await dana.notifications();
-    n.expect(rp.identity.legal_name === 'Dana Whitfield', 'regulator obtains the identity the merchants never saw');
-    n.expect(!notes.some((x) => x.kind === 'resolution'), 'principal not notified, because the order forbids tipping off (SAR confidentiality)');
-    const sth = await world.registrySth(regA);
-    n.note(`The resolution is itself logged in the registry's transparency log (now ${sth.tree_size} entries), so lookups of identity can also be audited.`);
+    n.expect(principal.identity.legal_name === 'Dana Whitfield', 'regulator obtains the identity the merchants never saw');
+    n.expect(!notes.some((x) => x.kind === 'attribution'), 'principal not notified, because the order forbids tipping off (SAR confidentiality)');
+    const sth = await world.directorySth(regA);
+    n.note(`The attribution is itself logged in the directory's transparency log (now ${sth.tree_size} entries), so lookups of identity can also be audited.`);
   },
 };

@@ -2,13 +2,13 @@
   "header": {
     "alg": "EdDSA",
     "typ": "aaf-agent-proof+jwt",
-    "kid": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ"
+    "kid": "1-ISdB-9wDjyqt3CQPJlcNRv6NncS_ZqPoykgFAY7kk"
   },
   "payload": {
-    "aud": "https://registry-a.aaf.test",
+    "aud": "https://directory-a.aaf.test",
     "purpose": "aaf-agent-registration",
-    "binding": "principal:prn_cewt16y2fhzq4rxk3wr1c76xxc",
-    "agent_key": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ",
-    "iat": 1795303625
+    "binding": "principal:prn_qmd3n6mtgsh32vzcwnj5epwkyw",
+    "agent_key": "1-ISdB-9wDjyqt3CQPJlcNRv6NncS_ZqPoykgFAY7kk",
+    "iat": 1795357490
   }
 }

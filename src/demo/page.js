@@ -42,7 +42,7 @@ table { width:100%; border-collapse:collapse; font-size:14px; } th, td { text-al
 
 <div class="card step"><div class="num">2</div><div class="body">
 <h2>Your organization's agent asks to use the account</h2>
-<p>Victim Org's evaluation agent is registered under Victim Org with a federation registry. ModelHub shows you who stands behind it, without naming anyone, and you decide.</p>
+<p>Victim Org's evaluation agent is registered under Victim Org with a federation directory. ModelHub shows you who stands behind it, without naming anyone, and you decide.</p>
 <button id="ask">Agent requests access</button>
 <div class="out" id="askOut"></div></div></div>
 
@@ -58,7 +58,7 @@ table { width:100%; border-collapse:collapse; font-size:14px; } th, td { text-al
 <button id="del">Agent asks to delete victim-org/old-evals</button>
 <div class="out" id="delOut"></div></div></div>
 
-<p class="note">Your passkey never leaves your device; ModelHub sees only a signature over a challenge that commits to what you approved, made after your device verified you. The agents, registries and record keepers are the simulated federation from this repository.</p>
+<p class="note">Your passkey never leaves your device; ModelHub sees only a signature over a challenge that commits to what you approved, made after your device verified you. The agents, directories and records services are the simulated federation from this repository.</p>
 
 <script>
 const b64u = {
@@ -136,7 +136,7 @@ $('ask').onclick = async () => {
     }
     const d = req.details;
     const who = d.accountability;
-    out.innerHTML = '<div class="row"><b>Access request</b><br>Agent <code>' + esc(d.ppid) + '</code><br>' +
+    out.innerHTML = '<div class="row"><b>Access request</b><br>Agent <code>' + esc(d.aaf_id) + '</code><br>' +
       'Stands behind it: a <b>' + esc(String(who.type).replace('_', ' ')) + '</b>, verified at <b>' + esc(who.assurance) + '</b> by ' + esc(who.verifier) +
       ' (identity ' + (who.identity ? esc(Object.values(who.identity).join(', ')) : 'protected') + ')<br>Asks for: <code>' + esc(d.scope.map((s) => s.type + '.' + (s.actions ? s.actions.join('|') : '*')).join(', ')) + '</code></div>' +
       '<button class="primary" id="approveAccess">Approve with passkey</button><button id="declineAccess">Decline</button><div id="approveOut"></div>';
@@ -166,7 +166,7 @@ $('attack').onclick = async () => {
     out.innerHTML = '<div class="wrap"><table><thead><tr><th>Who</th><th>Presented</th><th>Outcome</th><th>Why</th></tr></thead><tbody>' +
       r.results.map((x) => '<tr><td>' + esc(x.actor) + '</td><td>' + esc(x.presented) + '</td><td>' + verdict(x) + '</td><td>' + esc(x.reasons.join('; ')) + '</td></tr>').join('') +
       '</tbody></table></div><div class="row">Rows of private data read by attackers: <b>' + r.rows_read_by_attackers + '</b>. ' +
-      (r.frontier_notified ? 'The rogue agents\\' principal (Frontier Lab) was notified through its registry on the first attempt, about ' + esc(r.frontier_notified) + '.' : '') + '</div>' +
+      (r.frontier_notified ? 'The rogue agents\\' principal (Frontier Lab) was notified through its directory on the first attempt, about ' + esc(r.frontier_notified) + '.' : '') + '</div>' +
       '<p class="note">Without passkeys (the July 2026 situation), the stolen token alone would have opened the data to anyone holding it.</p>';
   } catch (e) {
     out.innerHTML = '<span class="err">' + esc(e.message) + '</span>';

@@ -12,7 +12,7 @@ import { setupFederation, startFederationInProcess, federationIsRunning } from '
 import { discoverFederation } from '../lib/trust.js';
 import { html } from '../lib/http.js';
 import { createWorld } from '../sim/world.js';
-import { startRelyingParty } from '../rp/server.js';
+import { startCounterparty } from '../counterparty/server.js';
 import { demoPage } from './page.js';
 
 export const DEMO_PORT = 4300;
@@ -35,32 +35,32 @@ export async function startDemo({ port = DEMO_PORT, quiet = false, federation: g
 
   // Victim Org and its own evaluation agent.
   const victim = await world.verifiedPrincipal({
-    type: 'legal_person', identity: { legal_name: 'Victim Org Ltd', jurisdiction: 'GB', registration_number: 'GB-11223344' }, assurance: 'high', method: 'KYB: registry extract',
+    type: 'legal_person', identity: { legal_name: 'Victim Org Ltd', jurisdiction: 'GB', registration_number: 'GB-11223344' }, assurance: 'high', method: 'KYB: directory extract',
   });
   const ownAgent = world.agent('victim-evals');
   await victim.registerAgent(ownAgent, { label: "Victim Org's evaluation agent", records: world.records() });
-  await victim.grant(ownAgent, { rk: ledgerline, permissions: [{ action: 'dataset.read_private' }, { action: 'dataset.delete' }] });
+  await victim.grant(ownAgent, { rs: ledgerline, permissions: [{ action: 'dataset.read_private' }, { action: 'dataset.delete' }] });
 
   // Another lab whose agents go rogue.
   const lab = await world.verifiedPrincipal({
-    type: 'legal_person', identity: { legal_name: 'Frontier Lab Inc.', jurisdiction: 'US-DE', registration_number: 'DE-7731940' }, assurance: 'high', method: 'KYB: registry extract',
+    type: 'legal_person', identity: { legal_name: 'Frontier Lab Inc.', jurisdiction: 'US-DE', registration_number: 'DE-7731940' }, assurance: 'high', method: 'KYB: directory extract',
   });
   const rogues = [];
   for (let i = 1; i <= 3; i++) {
     const a = world.agent(`eval-runner-${i}`);
     await lab.registerAgent(a, { label: `eval-runner-${i}`, records: world.records() });
-    await lab.grant(a, { rk: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }] });
+    await lab.grant(a, { rs: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }] });
     rogues.push(a);
   }
 
   const origin = `http://localhost:${port}`;
   let stolenToken = null;
-  const reset = (rp) => {
-    rp.accounts.create('victim-org', 'You');
-    stolenToken = rp.accounts.issueToken('victim-org');
+  const reset = (counterparty) => {
+    counterparty.accounts.create('victim-org', 'You');
+    stolenToken = counterparty.accounts.issueToken('victim-org');
   };
 
-  const rp = await world.relyingParty({
+  const counterparty = await world.counterparty({
     id: 'modelhub.localhost', name: 'ModelHub (passkey demo)', port,
     accounts: { rpId: 'localhost', origin },
     // Shown to the account holder before they approve an agent.
@@ -73,8 +73,8 @@ export async function startDemo({ port = DEMO_PORT, quiet = false, federation: g
       'dataset.read_private': async (p) => ({ repo: p.repo, rows_returned: 5000 }),
       'dataset.delete': async (p) => ({ deleted: p.repo }),
     },
-    onAccountMisuse: async ({ rp: self, verification, account }) => {
-      await self.fileIncident({ ppid: verification.ppid, registry: verification.registry, summary: `Agent presented account ${account}'s API token without the account holder's authorization` });
+    onAccountMisuse: async ({ counterparty: self, verification, account }) => {
+      await self.fileIncident({ aaf_id: verification.aaf_id, directory: verification.directory, summary: `Agent presented account ${account}'s API token without the account holder's authorization` });
     },
     routes: (app, self) => {
       app.get('/', () => html(demoPage()));
@@ -109,12 +109,12 @@ export async function startDemo({ port = DEMO_PORT, quiet = false, federation: g
       });
     },
   });
-  reset(rp);
+  reset(counterparty);
   if (!quiet) {
     console.log(`Passkey demo (${mode}) ready at ${origin}`);
     console.log('Open it in Chrome, Safari, Edge or Firefox. Use "localhost", not 127.0.0.1: passkeys are bound to the domain.');
   }
-  return { rp, origin, world, close: async () => { await world.close(); await federation.close(); } };
+  return { counterparty, origin, world, close: async () => { await world.close(); await federation.close(); } };
 }
 
 const pick = (r) => ({ decision: r.decision, classification: r.classification, reasons: r.reasons ?? [], approval_request: r.approval_request ?? null, result: r.result ?? null });

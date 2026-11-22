@@ -1,6 +1,6 @@
-// Start the trust anchor, then every registry and record keeper, each as its
-// own process; wait until they answer; then have the registries accredit the
-// record keepers (OpenID Federation Trust Marks).
+// Start the trust anchor, then every directory and records service, each as its
+// own process; wait until they answer; then have the directories accredit the
+// records services (OpenID Federation Trust Marks).
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { setupFederation, accreditAll, federationIsRunning } from '../src/lib/federation.js';
@@ -29,7 +29,7 @@ process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 
 launch('src/trustanchor/server.js');
-for (const svc of config.services) launch(svc.kind === 'registry' ? 'src/registry/server.js' : 'src/recordkeeper/server.js', [svc.id]);
+for (const svc of config.services) launch(svc.kind === 'directory' ? 'src/directory/server.js' : 'src/records/server.js', [svc.id]);
 
 const deadline = Date.now() + Number(process.env.AAF_STARTUP_TIMEOUT_SECONDS ?? 15) * 1000;
 while (!(await federationIsRunning(setup))) {
@@ -40,9 +40,9 @@ while (!(await federationIsRunning(setup))) {
   await new Promise((r) => setTimeout(r, 150));
 }
 const trustList = await discoverFederation(trustAnchor);
-for (const a of await accreditAll({ trustList, paths, config })) console.log(`  ${a.registry} ${a.already ? 'already accredits' : 'accredits'} ${a.rk} (${a.types.length} trust mark(s))`);
+for (const a of await accreditAll({ trustList, paths, config })) console.log(`  ${a.directory} ${a.already ? 'already accredits' : 'accredits'} ${a.rs} (${a.types.length} trust mark(s))`);
 console.log('\nFederation running. Dashboards:');
 console.log(`  ${trustAnchor.name.padEnd(50)} ${trustAnchor.url}/`);
-for (const s of [...trustList.registries, ...trustList.recordKeepers]) console.log(`  ${s.name.padEnd(50)} ${s.url}/`);
+for (const s of [...trustList.directories, ...trustList.recordsServices]) console.log(`  ${s.name.padEnd(50)} ${s.url}/`);
 console.log('\nRun the simulator in another terminal:  npm run sim');
 console.log('Press Ctrl+C to stop.');

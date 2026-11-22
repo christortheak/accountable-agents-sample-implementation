@@ -1,20 +1,20 @@
 {
   "log_id": "https://records-2.aaf.test",
   "index": 0,
-  "leaf_hash": "3uuBden-tAOhjAwmdpnUlW1GQJlG0mlfF2iRiWPSilg",
+  "leaf_hash": "KJjGakn-_L7Lsaue3HiPN4IxPAMxAO7rFmRfUVK7uq0",
   "tree_size": 1,
   "inclusion_proof": [],
   "sth": {
     "header": {
       "alg": "EdDSA",
       "typ": "aaf-sth+jwt",
-      "kid": "jhnN4X2p6pyy54pBk2El3DtPar724rnCFzdr_KTn1D0"
+      "kid": "hzu2V23b_GXMND8OZtut7_TMwK-PHG2ZwAohE7XJKMk"
     },
     "payload": {
       "log_id": "https://records-2.aaf.test",
       "tree_size": 1,
-      "root_hash": "3uuBden-tAOhjAwmdpnUlW1GQJlG0mlfF2iRiWPSilg",
-      "timestamp": 1795303625989
+      "root_hash": "KJjGakn-_L7Lsaue3HiPN4IxPAMxAO7rFmRfUVK7uq0",
+      "timestamp": 1795357490544
     }
   }
 }

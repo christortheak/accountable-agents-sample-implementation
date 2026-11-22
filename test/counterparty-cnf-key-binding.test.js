@@ -1,4 +1,4 @@
-// Regression: a relying party must accept an agent request only when the key
+// Regression: a counterparty must accept an agent request only when the key
 // that verifies the RFC 9421 signature is the presented credential's cnf key.
 // A keyid spelling ("jkt:" with a key carried in the body) is not authority.
 import { test } from 'node:test';
@@ -10,37 +10,37 @@ import { buildPresentationRequest } from '../src/lib/presentation.js';
 import { statusListToken, STATUS } from '../src/lib/status-list.js';
 import { SD_JWT_VC_TYP, vct, AGENT_SIGNATURE_TAG, AGENT_SIGNED_COMPONENTS } from '../src/lib/credentials.js';
 import { HEADERS, CLASSIFICATION as C } from '../src/lib/protocol.js';
-import { createVerifier } from '../src/rp/verifier.js';
+import { createVerifier } from '../src/counterparty/verifier.js';
 
-test('RP rejects an agent request signed by a key other than the credential cnf key', async () => {
+test('counterparty rejects an agent request signed by a key other than the credential cnf key', async () => {
   const TA = 'https://ta.example';
-  const REG = 'https://registry.example';
-  const RP = 'https://rp.example';
-  const URL = `${RP}/api/action`;
+  const REG = 'https://directory.example';
+  const counterparty = 'https://counterparty.example';
+  const URL = `${counterparty}/api/action`;
   const STATUS_URI = `${REG}/status/1`;
-  const registryKey = generateSigningKey();
+  const directoryKey = generateSigningKey();
   const holder = generateSigningKey();
   const attacker = generateSigningKey();
-  const registry = { id: REG, jwks: { keys: [registryKey.publicJwk] } };
-  const statusToken = statusListToken({ issuer: REG, key: registryKey, uri: STATUS_URI, values: new Map([[7, STATUS.VALID]]), ttl: 60 });
+  const directory = { id: REG, jwks: { keys: [directoryKey.publicJwk] } };
+  const statusToken = statusListToken({ issuer: REG, key: directoryKey, uri: STATUS_URI, values: new Map([[7, STATUS.VALID]]), ttl: 60 });
   const trust = {
     trustAnchor: { entity_id: TA },
-    registry: (id) => (id === REG ? registry : null),
-    recordKeeper: () => null,
+    directory: (id) => (id === REG ? directory : null),
+    recordsService: () => null,
     trustMarkIssuers: () => [],
     signingKey: (entity, kid) => entity?.jwks.keys.find((k) => !kid || k.kid === kid) ?? null,
     locate: () => `data:text/plain,${statusToken}`,
   };
   const now = nowSeconds();
   const credential = present(issueSdJwt({
-    vct: vct(TA, 'accountability'), iss: REG, sub: 'aaf:registry.example:p_victim', aud: RP, iat: now, exp: now + 600,
+    vct: vct(TA, 'accountability'), iss: REG, sub: 'aaf:directory.example:p_victim', aud: counterparty, iat: now, exp: now + 600,
     cnf: { jwk: publicOf(holder.publicJwk) }, id_mode: 'pairwise',
     accountability: { status: 'accountable', principal_type: 'legal_person', chain_length: 1, attributes: [] },
     status: { status_list: { idx: 7, uri: STATUS_URI } },
-  }, registryKey, { typ: SD_JWT_VC_TYP }), () => true);
+  }, directoryKey, { typ: SD_JWT_VC_TYP }), () => true);
 
   // The holder's request, observed by an attacker (presentation and nonce).
-  const legit = buildPresentationRequest({ url: URL, rpId: RP, params: { amount: 1 }, accountability: credential, key: holder });
+  const legit = buildPresentationRequest({ url: URL, counterpartyId: counterparty, params: { amount: 1 }, accountability: credential, key: holder });
   const presentation = legit.headers[HEADERS.presentation];
 
   // The attacker re-signs a new request with its own key, spelled "jkt:".
@@ -50,7 +50,7 @@ test('RP rejects an agent request signed by a key other than the credential cnf 
     components: AGENT_SIGNED_COMPONENTS, headers: { 'content-type': 'application/json', [HEADERS.presentation]: presentation },
   });
 
-  const verifier = createVerifier({ rpId: RP, trust });
+  const verifier = createVerifier({ counterpartyId: counterparty, trust });
   const out = await verifier.verify({ headers, url: URL, method: 'POST', rawBody: body, action: 'commerce.purchase', params: { amount: 900 } });
   assert.equal(out.classification, C.UNSUPPORTED);
   assert.match(out.failure, /does not hold the credential's key/);

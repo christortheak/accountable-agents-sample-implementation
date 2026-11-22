@@ -1,8 +1,8 @@
-// Privacy analysis helpers for the simulator: what a relying party learned,
-// and whether two relying parties could link what they received.
+// Privacy analysis helpers for the simulator: what a counterparty learned,
+// and whether two counterparties could link what they received.
 import { b64u } from '../lib/crypto.js';
 
-// Not agent identifiers: per-request times, the relying party's own endpoint,
+// Not agent identifiers: per-request times, the counterparty's own endpoint,
 // and credential-type and status-list URIs shared by every credential of a kind.
 const SKIP_KEYS = new Set(['iat', 'exp', 'typ', 'alg', 'vct', 'uri']);
 
@@ -39,14 +39,14 @@ export function correlationHandles(received, publicValues) {
     sdJwt(pres.accountability, 'accountability');
     if (pres.authorization) sdJwt(pres.authorization, 'authorization');
     if (pres.approval) sdJwt(pres.approval, 'approval');
-    // RFC 9421 parameters: keyid (the per-RP key's thumbprint) and nonce.
+    // RFC 9421 parameters: keyid (the per-counterparty key's thumbprint) and nonce.
     for (const m of String(r.signatureInput ?? '').matchAll(/;(keyid|nonce)="([^"]+)"/g)) add(m[2], `signature-input.${m[1]}`);
     add(String(r.signature ?? '').replace(/^sig1=:|:$/g, ''), 'signature');
   }
   return handles;
 }
 
-/** Values two relying parties both received (excluding public constants). */
+/** Values two counterparties both received (excluding public constants). */
 export function sharedHandles(receivedA, receivedB, publicValues) {
   const a = correlationHandles(receivedA, publicValues);
   const b = correlationHandles(receivedB, publicValues);
@@ -55,7 +55,7 @@ export function sharedHandles(receivedA, receivedB, publicValues) {
 
 export function publicValuesOf(trust, extra = []) {
   const set = new Set([...extra, trust.trustAnchor.entity_id]);
-  for (const e of [...trust.registries, ...trust.recordKeepers, ...trust.doc.verifiers, ...trust.doc.resolution_authorities]) {
+  for (const e of [...trust.directories, ...trust.recordsServices, ...trust.doc.verifiers, ...trust.doc.designated_authorities]) {
     set.add(e.id);
     set.add(e.name);
     if (e.url) set.add(e.url);
@@ -64,4 +64,4 @@ export function publicValuesOf(trust, extra = []) {
   return set;
 }
 
-export { whatWasLearned } from '../rp/learned.js';
+export { whatWasLearned } from '../counterparty/learned.js';

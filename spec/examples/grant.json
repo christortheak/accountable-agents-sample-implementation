@@ -2,23 +2,23 @@
   "header": {
     "alg": "EdDSA",
     "typ": "aaf-grant+jwt",
-    "kid": "zLI_5vpYtOw1eG7pUXLv6_XlJd6P29LdOP6p_gHeTQY",
+    "kid": "_0vqH9OnpRn5VLRrzdG5kuCzu48_3WDdgGvvE5mxDks",
     "jwk": {
       "crv": "Ed25519",
-      "x": "t7t7N1f7-FLlh4JDjC6kEJpOIeseKx72BtiiZNYMPXU",
+      "x": "QW3Vbb_zTZNDz_JbvXuCjHu8XjTJ-S-zsbR7cIRBCqw",
       "kty": "OKP",
-      "kid": "zLI_5vpYtOw1eG7pUXLv6_XlJd6P29LdOP6p_gHeTQY"
+      "kid": "_0vqH9OnpRn5VLRrzdG5kuCzu48_3WDdgGvvE5mxDks"
     }
   },
   "payload": {
-    "iss": "principal:prn_cewt16y2fhzq4rxk3wr1c76xxc@https://registry-a.aaf.test",
-    "sub": "reg_8rmfjcqpw2pe1624c73r88rnp8",
-    "registry": "https://registry-a.aaf.test",
-    "agent_key": "4VFrCxMEvk5r0k5OerrVKuwuQg5uatAqGBzFoLt9kkQ",
-    "iat": 1795303625,
-    "nbf": 1795303625,
-    "exp": 1797895625,
-    "jti": "grt_0v6rme36v65e3354b5dg",
+    "iss": "principal:prn_qmd3n6mtgsh32vzcwnj5epwkyw@https://directory-a.aaf.test",
+    "sub": "reg_r1kdds8vthmj9gg98jgcgpzw0c",
+    "directory": "https://directory-a.aaf.test",
+    "agent_key": "1-ISdB-9wDjyqt3CQPJlcNRv6NncS_ZqPoykgFAY7kk",
+    "iat": 1795357490,
+    "nbf": 1795357490,
+    "exp": 1797949490,
+    "jti": "grt_3g46vkz72hxmm6x4gna0",
     "authorization_details": [
       {
         "type": "commerce",

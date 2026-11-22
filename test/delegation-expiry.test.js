@@ -39,10 +39,10 @@ test('a default-length grandchild delegation made a second later stays within it
   const fed = await startFederationInProcess({ dataDir, portOffset: 6000 });
   try {
     const { trustList, paths } = fed;
-    const reg = trustList.registry('https://registry-a.aaf.test');
-    const rk = trustList.recordKeeper('https://records-1.aaf.test');
-    const records = [{ role: 'authorization', rk: rk.id }];
-    const p = new Principal({ type: 'legal_person', identity: { legal_name: 'Lineage Test Ltd', jurisdiction: 'US' }, registry: reg, trust: trustList });
+    const reg = trustList.directory('https://directory-a.aaf.test');
+    const rs = trustList.recordsService('https://records-1.aaf.test');
+    const records = [{ role: 'authorization', rs: rs.id }];
+    const p = new Principal({ type: 'legal_person', identity: { legal_name: 'Lineage Test Ltd', jurisdiction: 'US' }, directory: reg, trust: trustList });
     await p.enroll();
     await new IdentityVerifier({ id: 'https://kyc.verifier.test', keys: loadKeys('https://kyc.verifier.test', paths.keysDir) }).verify(p, { assurance: 'high', method: 'test' });
 
@@ -51,7 +51,7 @@ test('a default-length grandchild delegation made a second later stays within it
     const grandchild = new Agent({ name: 'Grandchild', trust: trustList });
     const other = new Agent({ name: 'Other', trust: trustList });
     await p.registerAgent(parent, { label: 'parent', records });
-    await p.grant(parent, { rk, permissions: [{ action: 'data.query' }], delegation: { allowed: true, max_depth: 2 } });
+    await p.grant(parent, { rs, permissions: [{ action: 'data.query' }], delegation: { allowed: true, max_depth: 2 } });
     await parent.registerSubagent(child, { label: 'child', records });
     await parent.delegate(child, { permissions: [{ action: 'data.query' }], delegation: { allowed: true, max_depth: 1 } });
     const childExp = decodeJws(child.grants[0].grant).payload.exp;
@@ -60,7 +60,7 @@ test('a default-length grandchild delegation made a second later stays within it
     await new Promise((r) => setTimeout(r, 1100));
     await child.registerSubagent(grandchild, { label: 'grandchild', records });
     const res = await child.delegate(grandchild, { permissions: [{ action: 'data.query' }] });
-    assert.ok(res.grant_id, 'the record keeper accepted the default-length grandchild grant');
+    assert.ok(res.grant_id, 'the records service accepted the default-length grandchild grant');
     assert.equal(decodeJws(grandchild.grants[0].grant).payload.exp, childExp);
 
     // Asking explicitly for longer than the parent grant is refused before anything is sent.

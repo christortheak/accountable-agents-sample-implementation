@@ -58,11 +58,11 @@ export function createNarrator({ color = process.stdout.isTTY && !process.env.NO
       }
     },
 
-    decision(rpName, res) {
+    decision(counterpartyName, res) {
       const label = String(res.decision).toUpperCase();
       const why = res.reasons?.length ? ` — ${res.reasons.join('; ')}` : '';
-      out(`   ${decisionColor(res.decision)('●')} ${bold(rpName)} → ${decisionColor(res.decision)(bold(label))} ${dim(`[${res.classification}${res.tier ? `, tier: ${res.tier}` : ''}]`)}${why}`);
-      md.push(`- **${rpName} → ${label}** \`${res.classification}\`${res.tier ? ` (tier: ${res.tier})` : ''}${why}`);
+      out(`   ${decisionColor(res.decision)('●')} ${bold(counterpartyName)} → ${decisionColor(res.decision)(bold(label))} ${dim(`[${res.classification}${res.tier ? `, tier: ${res.tier}` : ''}]`)}${why}`);
+      md.push(`- **${counterpartyName} → ${label}** \`${res.classification}\`${res.tier ? ` (tier: ${res.tier})` : ''}${why}`);
     },
 
     learned(party, items) {

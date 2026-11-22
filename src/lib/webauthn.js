@@ -179,7 +179,7 @@ export class SoftwareAuthenticator {
   get(options, origin, { userVerified = true } = {}) {
     const allowed = (options.allowCredentials ?? []).map((c) => c.id);
     const id = [...this.credentials.keys()].find((k) => this.credentials.get(k).rpId === options.rpId && (!allowed.length || allowed.includes(k)));
-    if (!id) throw new WebAuthnError('no_credential', 'this authenticator holds no passkey for that relying party');
+    if (!id) throw new WebAuthnError('no_credential', 'this authenticator holds no passkey for that service');
     const cred = this.credentials.get(id);
     cred.signCount += 1;
     const count = Buffer.alloc(4);

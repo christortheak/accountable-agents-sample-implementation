@@ -2,10 +2,10 @@
 
 A working implementation of the framework described in *The Accountable Agents Framework (AAF): A Blueprint for AI Agent IDs* (draft of 21 November 2026). The paper's conclusion invites "a reference implementation of a realistic workflow"; this is one. It has four parts:
 
-- **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.3), with real example artifacts in [`spec/examples/`](spec/examples/). Its [§3](spec/AAF-SPEC.md#3-requirements-traceability) maps every requirement in the paper's Appendix A to the code and a test.
-- **Running services**: an OpenID Federation trust anchor, two federated registries (US and EU), and two record keepers (authorization and provenance; activity).
+- **A specification**: [`spec/AAF-SPEC.md`](spec/AAF-SPEC.md) (profile 0.4), with real example artifacts in [`spec/examples/`](spec/examples/). Its [§3](spec/AAF-SPEC.md#3-requirements-traceability) maps every requirement in the paper's Appendix A to the code and a test.
+- **Running services**: an OpenID Federation trust anchor, two federated directories (US and EU), and two records services (authorization and provenance; activity).
 - **A transaction simulator**: seven scenarios that check the expected outcome of each step. Scenario 4 is the pilot the paper calls for: a disclosed organization, a privacy-protected person, unsupported claims, and revoked or compromised credentials.
-- **A pilot kit** for running a live federation with invited participants: an `aaf` command-line tool, a standalone relying party, and Docker and HTTPS configuration.
+- **A pilot kit** for running a live federation with invited participants: an `aaf` command-line tool, a standalone counterparty, and Docker and HTTPS configuration.
 
 | Guide | For |
 |---|---|
@@ -18,34 +18,33 @@ It needs only Node.js 22 or later and has no dependencies. All cryptography uses
 
 ## How it maps to the paper
 
-The code keeps its earlier names. The paper's terms map to them like this:
+The code, APIs and wire formats use the paper's terms. Where a term needs a concrete form, it takes this one:
 
-| The paper says | Here |
+| The paper's term | Here |
 |---|---|
-| directory | a **registry**, with the identity verifiers it relies on and the **record keepers** it accredits |
-| counterparty | **relying party** |
+| directory | a **directory**: the service that holds identities and issues IDs, the **records services** it accredits, and the identity verifiers it relies on |
 | presentation, claims | the `AAF-Presentation` header: an accountability credential (the ID), and optionally authority and an approval |
-| ID | written `aaf:<directory>:…`; fields that carry it are still named `ppid` |
-| PPID (reusable) / unlinkable ID | an ID in `pairwise` / `ephemeral` (single-use) mode |
-| identity escrow, attribution | **resolution** under a legal order |
-| delegating agent | parent agent |
+| ID | written `aaf:<directory>:…`; fields that carry one are named `aaf_id` |
+| PPID (reusable) / unlinkable ID | an ID whose `id_mode` is `pairwise` / `unlinkable` (used once) |
+| identity escrow, attribution | the directory traces an ID to its principal under a legal order from a designated authority |
+| principal record, agent record | the principal record, and the agent's registration |
 
 Against the paper's Appendix A:
 
-- **Met:** every required property (PV-1, PV-3, PV-5, AG-1, AG-2, PR-1 to PR-7, PR-9, PR-10, RV-1, RV-2, ES-1, DR-1, DR-2), with one gap in RV-1: a registry cannot yet withdraw a single attribute before it expires.
+- **Met:** every required property (PV-1, PV-3, PV-5, AG-1, AG-2, PR-1 to PR-7, PR-9, PR-10, RV-1, RV-2, ES-1, DR-1, DR-2), with one gap in RV-1: a directory cannot yet withdraw a single attribute before it expires.
 - **Optional properties built:** human and legal-entity proofing (PV-2), delegation (AG-3), key replacement (AG-5), agent PPIDs (PR-8).
 - **Optional properties not built:** Sybil resistance across directories (PV-4), several principals per agent (AG-4), principal and group PPIDs (PR-8), multi-party escrow (ES-2), conformity assessment (DR-3).
-- **Beyond the paper:** accredited record keepers, transfer of agents between principals, incident relay, bills of materials, activity logs, and passkey-bound account access. These are extensions, not requirements of the paper.
+- **Beyond the paper:** accredited records services, transfer of agents between principals, incident relay, bills of materials, activity logs, and passkey-bound account access. These are extensions, not requirements of the paper.
 
-Two limits matter most. The registry issues each ID on demand for a named relying party, so it learns which services an agent uses. And there is one trust anchor, though each relying party can choose which registries it accepts. [Spec §16](spec/AAF-SPEC.md#16-limitations-and-open-questions) lists the rest.
+Two limits matter most. The directory issues each ID on demand for a named counterparty, so it learns which services an agent uses. And there is one trust anchor, though each counterparty can choose which directories it accepts. [Spec §16](spec/AAF-SPEC.md#16-limitations-and-open-questions) lists the rest.
 
 ## Built on existing standards
 
-Existing specifications are used wherever one fits. The profile's own designs are limited to what none of them covers: the chain from a running agent to a verified principal, IDs and their resolution under escrow, lineages and transfer, legal orders, and incident relay.
+Existing specifications are used wherever one fits. The profile's own designs are limited to what none of them covers: the chain from a running agent to a verified principal, IDs and their attribution under escrow, lineages and transfer, legal orders, and incident relay.
 
 | Concern | Specification |
 |---|---|
-| Federation, trust anchor, accreditation of record keepers | OpenID Federation 1.0 (entity statements, trust marks) |
+| Federation, trust anchor, accreditation of records services | OpenID Federation 1.0 (entity statements, trust marks) |
 | KYC/KYB results and principal attributes | OpenID Connect for Identity Assurance (`verified_claims`) |
 | Credentials an agent presents | SD-JWT VC with Key Binding |
 | Revocation status | IETF Token Status List |
@@ -85,8 +84,8 @@ npm run sim
 | Service | Entity identifier | Local dashboard |
 |---|---|---|
 | Trust anchor | `https://federation.aaf.test` | http://127.0.0.1:4100/ |
-| Registry A (United States) | `https://registry-a.aaf.test` | http://127.0.0.1:4101/ |
-| Registry B (European Union) | `https://registry-b.aaf.test` | http://127.0.0.1:4102/ |
+| Directory A (United States) | `https://directory-a.aaf.test` | http://127.0.0.1:4101/ |
+| Directory B (European Union) | `https://directory-b.aaf.test` | http://127.0.0.1:4102/ |
 | Ledgerline Records (authorization + provenance) | `https://records-1.aaf.test` | http://127.0.0.1:4201/ |
 | Tessera Logs (activity) | `https://records-2.aaf.test` | http://127.0.0.1:4202/ |
 
@@ -114,9 +113,9 @@ Other commands:
 | `npm run sim -- payment hf` | Run selected scenarios, by id or number (`--list` shows them). |
 | `npm run sim -- --fresh` | Run against a throwaway federation with temporary state. |
 | `npm test` | Run the unit tests, service tests and every scenario as integration tests. |
-| `npm run rp` | Start the sandbox shop (a standalone relying party) at http://127.0.0.1:4400. |
+| `npm run shop` | Start the sandbox shop (a standalone counterparty) at http://127.0.0.1:4400. |
 | `node src/cli/aaf.js help` | The `aaf` command-line tool for principals, agents and operators (see docs/PARTICIPATING.md). |
-| `npm run reset` | Wipe all state and keys, then regenerate the federation. Needed after upgrading from an earlier profile: IDs and credentials changed format in 0.3. |
+| `npm run reset` | Wipe all state and keys, then regenerate the federation. Needed after upgrading from an earlier profile: IDs and credentials changed format in 0.3, and 0.4 renamed services, fields and commands to the paper's terms. |
 | `node scripts/examples.js` | Regenerate the spec's example artifacts. |
 
 ## The scenarios
@@ -125,24 +124,24 @@ Other commands:
 |---|---|---|---|
 | 1 | `payment` | PR-5 to PR-8, PR-10, RV-1, ES-1 | A shopping agent at two merchants and a BSA-regulated bank. The merchants learn only an ID and the purchasing permission. The bank sets acceptance criteria (kind of principal, assurance level, chain length) and is shown those. A refusal above the limit is flagged as a SAR candidate; then revocation, and attribution by a regulator without tipping off the subject. Also an automated check that the merchants cannot link what they received. |
 | 2 | `filing` | PR-4, PR-10 | Identity and authority checked separately. The agent cannot submit alone. The officer approves with a passkey, bound to the exact document, and a revoked officer's approval is refused. A dispute is settled from both sides' signed logs. A healthcare variant proves licensure without naming the provider. |
-| 3 | `hf` | RV-1, ES-1; paper §3.3 (rogue agents) | The Hugging Face incident replayed three ways. Branch A: unidentified agents are denied. Branch B, the framework alone: accountable agents using a stolen account token are logged from the first request; the principal is notified, revocation stops the attack, and a court order yields the principal, its agents and the model. Branch C, the framework plus passkeys: the platform binds account access to passkey-approved agents, so the stolen token is refused at the first request and nothing is read. Also rent-a-principal: the sham sponsor is identified, and a court order has the registry revoke the agent. |
-| 4 | `compute` | the pilot in the paper's conclusion; PR-7, ES-1 | Paid GPUs for a disclosed organization, a privacy-protected person using single-use IDs, unsupported claims, a registry outage (`deferred`), and revoked or compromised credentials. |
-| 5 | `federation` | AG-3; several directories | A parent agent in the US registry registers a sub-agent in the EU registry. Over-delegation is rejected. The incident relay, revocation and resolution cross registries. |
-| 6 | `audit` | paper §3.5 (verifiable activity records) | A compromised activity record keeper rewrites a refusal. The relying party proves the tampering from its receipt, and the registry's chain of custody is unaffected. |
+| 3 | `hf` | RV-1, ES-1; paper §3.3 (rogue agents) | The Hugging Face incident replayed three ways. Branch A: unidentified agents are denied. Branch B, the framework alone: accountable agents using a stolen account token are logged from the first request; the principal is notified, revocation stops the attack, and a court order yields the principal, its agents and the model. Branch C, the framework plus passkeys: the platform binds account access to passkey-approved agents, so the stolen token is refused at the first request and nothing is read. Also rent-a-principal: the sham sponsor is identified, and a court order has the directory revoke the agent. |
+| 4 | `compute` | the pilot in the paper's conclusion; PR-7, ES-1 | Paid GPUs for a disclosed organization, a privacy-protected person using single-use IDs, unsupported claims, a directory outage (`deferred`), and revoked or compromised credentials. |
+| 5 | `federation` | AG-3; several directories | A delegating agent in the US directory registers a sub-agent in the EU directory. Over-delegation is rejected. The incident relay, revocation and attribution cross directories. |
+| 6 | `audit` | paper §3.5 (verifiable activity records) | A compromised activity records service rewrites a refusal. The counterparty proves the tampering from its receipt, and the directory's chain of custody is unaffected. |
 | 7 | `lineage` | AG-3, AG-5; transfer (an extension) | Short-lived sub-agents that expire with their parents; lineage depth budgets; deregistration cutting off a branch. Transfer of an agent and its sub-agents to another principal: both sign, IDs and authority start over, and the old principal remains answerable for the time before. |
 
 ## Code layout
 
-| Component (the paper's term) | Code |
+| Component | Code |
 |---|---|
 | Trust anchor (governance body) | [`src/trustanchor/`](src/trustanchor/) |
-| Registry (directory) | [`src/registry/`](src/registry/) |
-| Record keepers (the record-keeping part of a directory) | [`src/recordkeeper/`](src/recordkeeper/) |
+| Directory: principal and agent records, IDs, status, identity escrow | [`src/directory/`](src/directory/) |
+| Records services (the part of a directory that keeps authorizations, bills of materials and activity logs) | [`src/records/`](src/records/) |
 | Principal, agent, provider, identity verifier, court or regulator (designated authority) | [`src/actors/`](src/actors/) |
-| Relying party (counterparty): verification, acceptance criteria, policy, evidence, passkey accounts | [`src/rp/`](src/rp/) |
+| Counterparty: verification, acceptance criteria, policy, evidence, passkey accounts | [`src/counterparty/`](src/counterparty/) |
 | Browser demo (real passkeys) | [`src/demo/`](src/demo/) |
 | `aaf` command-line tool | [`src/cli/`](src/cli/) |
-| Standalone relying party (sandbox shop) | [`src/rp/standalone.js`](src/rp/standalone.js) |
+| Standalone counterparty (sandbox shop) | [`src/counterparty/standalone.js`](src/counterparty/standalone.js) |
 | Deployment: Dockerfile, Compose, Caddy (HTTPS), and a local check of all three | [`deploy/`](deploy/), with config templates in [`config/`](config/) |
 | Standards building blocks (RFC 9421, SD-JWT, status lists, OpenID Federation, IDA, RAR, WebAuthn, CBOR, Merkle logs) | [`src/lib/`](src/lib/) |
 

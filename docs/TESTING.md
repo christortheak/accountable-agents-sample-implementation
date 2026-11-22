@@ -31,9 +31,9 @@ Each scenario is a short story with numbered steps. The markers mean:
 | Marker | Meaning |
 |---|---|
 | `▸ Actor: …` | something a party did |
-| `✓` / `✗` | one check a relying party performed (signature, status, trust mark, authority …) |
-| `● Relying party → ALLOW / DENY / STEP_UP / DEFERRED [CLASSIFICATION]` | its decision, and why |
-| `◆ What X learned` | what the relying party now knows, and what stayed hidden |
+| `✓` / `✗` | one check a counterparty performed (signature, status, trust mark, authority …) |
+| `● Counterparty → ALLOW / DENY / STEP_UP / DEFERRED [CLASSIFICATION]` | its decision, and why |
+| `◆ What X learned` | what the counterparty now knows, and what stayed hidden |
 | `✔ expected:` / `✘ UNEXPECTED:` | the scenario's own assertion about the outcome |
 
 The summary at the end counts the assertions per scenario. `All expectations met.` means every step behaved as the framework says it should. The same text, in Markdown, is saved to `reports/simulation-report.md`.
@@ -47,13 +47,13 @@ npm test
 This runs 51 tests:
 - **Unit tests** for the building blocks: JWS and JWE, SD-JWT with key binding, RFC 9162 Merkle proofs, RFC 8785 canonical JSON, RFC 9421 HTTP message signatures, the Token Status List (including invalid indices and values), RAR authority, and WebAuthn.
 - **Service tests:** state survives a restart, and requests are refused when they are unverified, replayed or signed with the wrong key.
-- **Relying-party key binding:** an agent's request must be signed with its credential's own key, and replays and substituted keys are refused.
+- **Counterparty key binding:** an agent's request must be signed with its credential's own key, and replays and substituted keys are refused.
 - **Trust-anchor pinning:** a pin constrains the key that actually signed, and newly advertised keys are not trusted.
 - **Delegation:** a delegated grant never outlives the grant it comes from.
-- **The paper's requirements** that have their own behavior here: one principal record per verified identity, agents proving they hold their key, the ID alone as a valid presentation, a relying party's acceptance criteria, revocation under a legal order, and published practices.
+- **The paper's requirements** that have their own behavior here: one principal record per verified identity, agents proving they hold their key, the ID alone as a valid presentation, a counterparty's acceptance criteria, revocation under a legal order, and published practices.
 - **Every simulator scenario**, run as an integration test.
 - **The passkey demo**, driven with a simulated passkey.
-- **The pilot kit:** the HTTPS fix, the `aaf` command-line tool end to end, and the standalone relying party.
+- **The pilot kit:** the HTTPS fix, the `aaf` command-line tool end to end, and the standalone counterparty.
 
 ## Watching it happen
 
@@ -61,13 +61,13 @@ This runs 51 tests:
 npm start
 ```
 
-This starts the trust anchor, two registries and two record keepers as separate processes. Run `npm run sim` in a second terminal, then open the dashboards:
+This starts the trust anchor, two directories and two records services as separate processes. Run `npm run sim` in a second terminal, then open the dashboards:
 
 | Service | Dashboard |
 |---|---|
 | Trust anchor | http://127.0.0.1:4100/ |
-| Registry A (US) | http://127.0.0.1:4101/ |
-| Registry B (EU) | http://127.0.0.1:4102/ |
+| Directory A (US) | http://127.0.0.1:4101/ |
+| Directory B (EU) | http://127.0.0.1:4102/ |
 | Ledgerline Records (authorization + provenance) | http://127.0.0.1:4201/ |
 | Tessera Logs (activity) | http://127.0.0.1:4202/ |
 
@@ -78,7 +78,7 @@ Stop everything with Ctrl+C in the first terminal.
 With `npm start` running, start the sandbox shop in a second terminal:
 
 ```bash
-npm run rp
+npm run shop
 ```
 
 Then act as a participant in a third terminal; `docs/PARTICIPATING.md` explains each step. On your own machine you are also the operator, so you verify yourself:
@@ -133,4 +133,4 @@ Open **http://localhost:4300** in Chrome, Safari, Edge or Firefox. Use `localhos
 
 - **`EADDRINUSE` (port already in use):** another copy of the services is running. Stop it, or run with `--fresh`, which uses different ports.
 - **"trust anchor configuration not found":** run `npm run setup`, or let `npm start` / `npm run sim` do it.
-- **Odd failures after updating the code:** run `npm run reset`. Old state in `data/` may not match the new code. Profile 0.3 changed the format of IDs and credentials, so state from before it needs a reset.
+- **Odd failures after updating the code:** run `npm run reset`. Old state in `data/` may not match the new code. Profile 0.3 changed the format of IDs and credentials, and profile 0.4 renamed services and fields to the paper's terms (registry to directory, record keeper to records service, relying party to counterparty), so state from before either needs a reset.

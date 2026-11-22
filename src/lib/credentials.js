@@ -8,6 +8,6 @@ export const SD_JWT_VC_TYP = 'dc+sd-jwt';
 export const vct = (trustAnchorId, kind) => `${trustAnchorId}/vct/${kind}/1`;
 export const VCT_KINDS = { accountability: 'accountability', authorization: 'authorization', approval: 'approval' };
 
-/** Signature tag for agent-to-relying-party requests (RFC 9421), cf. Web Bot Auth's "web-bot-auth". */
+/** Signature tag for agent-to-counterparty requests (RFC 9421), cf. Web Bot Auth's "web-bot-auth". */
 export const AGENT_SIGNATURE_TAG = 'aaf-agent';
 export const AGENT_SIGNED_COMPONENTS = ['@method', '@target-uri', 'content-digest', 'content-type', 'aaf-presentation'];

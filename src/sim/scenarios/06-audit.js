@@ -11,22 +11,22 @@ export default {
   id: 'audit',
   title: 'Scenario 6 — Audit: tamper-evident records',
   framing:
-    'Records must be attributable to their source, tamper-evident, and reachable through the registry. Here an activity record keeper is compromised and quietly rewrites a refusal as an approval. ' +
-    'The relying party detects it with the receipt it was given, and the registry\'s own chain of custody is unaffected.',
+    'Records must be attributable to their source, tamper-evident, and reachable through the directory. Here an activity records service is compromised and quietly rewrites a refusal as an approval. ' +
+    'The counterparty detects it with the receipt it was given, and the directory\'s own chain of custody is unaffected.',
 
   async run(world, n) {
     const { regA, ledgerline, tessera } = world;
-    const registryBefore = await world.registrySth(regA);
+    const directoryBefore = await world.directorySth(regA);
 
-    n.step('A refused transaction is logged, and the relying party keeps its receipt');
+    n.step('A refused transaction is logged, and the counterparty keeps its receipt');
     const ostrander = await world.verifiedPrincipal({
       type: 'legal_person', identity: { legal_name: 'Ostrander Supply Co.', jurisdiction: 'US-OH', registration_number: 'OH-5521907' },
-      assurance: 'high', method: 'KYB: registry extract',
+      assurance: 'high', method: 'KYB: directory extract',
     });
     const courier = world.agent('Courier');
     await ostrander.registerAgent(courier, { label: 'procurement agent', records: world.records() });
-    await ostrander.grant(courier, { rk: ledgerline, permissions: [{ action: 'commerce.purchase', constraints: { max_amount: money(1000), categories: ['freight'] } }] });
-    const exchange = await world.relyingParty({
+    await ostrander.grant(courier, { rs: ledgerline, permissions: [{ action: 'commerce.purchase', constraints: { max_amount: money(1000), categories: ['freight'] } }] });
+    const exchange = await world.counterparty({
       id: 'parcel-exchange.example', name: 'Parcel Exchange',
       rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] },
       handlers: { 'commerce.purchase': async () => ({ booking: 'PX-1' }) },
@@ -39,13 +39,13 @@ export default {
     n.act('Tessera Logs', `acknowledges entry #${receipt.index} with an inclusion proof and a signed tree head (size ${sthAtReceipt.tree_size}, root ${sthAtReceipt.root_hash.slice(0, 16)}…)`);
     n.expect(res.decision === 'deny' && world.verifyReceipt(receipt).ok, 'refusal recorded; receipt verifies');
 
-    n.step('The record keeper is compromised and rewrites history');
+    n.step('The records service is compromised and rewrites history');
     const { adminToken } = loadKeys(tessera.id, world.keysDir);
     await postJson(`${tessera.url}/admin/tamper`, { index: receipt.index, details: { decision: 'allow', reasons: [] } }, { authorization: `Bearer ${adminToken}` });
     n.act('Tessera Logs (compromised)', `rewrites entry #${receipt.index} so the refusal reads as an approval, and recomputes its tree to stay internally consistent`);
 
     n.step('Parcel Exchange audits its record');
-    const mine = await exchange.readActivity(tessera, ev.ppid);
+    const mine = await exchange.readActivity(tessera, ev.aaf_id);
     const current = mine.entries.find((e) => e.index === receipt.index);
     const contentMatches = entryLeafHash(current.entry) === receipt.leaf_hash;
     let signatureOk = true;
@@ -63,17 +63,17 @@ export default {
     const proofNow = await getJson(`${tessera.url}/v1/log/proof?index=${receipt.index}&size=${sthAtReceipt.tree_size}`);
     n.act('Parcel Exchange', `asks Tessera to prove its current log extends the tree it signed earlier → ${consistent ? 'proof verifies' : 'proof FAILS'}`);
     n.act('Parcel Exchange', `Tessera now reports root ${proofNow.root_hash.slice(0, 16)}… for size ${sthAtReceipt.tree_size}, but it signed ${sthAtReceipt.root_hash.slice(0, 16)}… for that size`);
-    n.note('Two signed statements from the same keeper about the same tree size disagree. That is cryptographic proof of misconduct, which can be put to the accrediting registry.');
+    n.note('Two signed statements from the same records service about the same tree size disagree. That is cryptographic proof of misconduct, which can be put to the accrediting directory.');
     n.expect(!contentMatches && !signatureOk && !consistent && proofNow.root_hash !== sthAtReceipt.root_hash, 'tampering detected, with proof that can be shown to others');
 
-    n.step("The registry's chain of custody is intact");
-    const registryNow = await world.registrySth(regA);
-    const rc = await getJson(`${regA.url}/v1/transparency/consistency?first=${registryBefore.tree_size}&second=${registryNow.tree_size}`);
-    const registryConsistent = verifyConsistency({ firstSize: registryBefore.tree_size, secondSize: registryNow.tree_size, firstRoot: registryBefore.root_hash, secondRoot: registryNow.root_hash, proof: rc.proof });
-    n.act('Auditor', `checks ${regA.name}'s transparency log grew append-only from ${registryBefore.tree_size} to ${registryNow.tree_size} entries → ${registryConsistent ? 'verified' : 'FAILED'}`);
-    const order = world.court.order({ caseId: 'In re Tessera Logs (accreditation review)', ppids: [ev.ppid], relyingParty: exchange.id, requester: 'Registry A accreditation board' });
-    const resolved = await world.court.resolve(regA, { order, ppid: ev.ppid });
-    n.act('Investigators', `still resolve the agent through the registry → ${resolved.result.root_principal.identity.legal_name}; the registry's record never depended on Tessera`);
-    n.expect(registryConsistent && resolved.result.root_principal.identity.legal_name === 'Ostrander Supply Co.', 'registry log verified append-only; the investigation proceeds without the compromised keeper');
+    n.step("The directory's chain of custody is intact");
+    const directoryNow = await world.directorySth(regA);
+    const rc = await getJson(`${regA.url}/v1/transparency/consistency?first=${directoryBefore.tree_size}&second=${directoryNow.tree_size}`);
+    const directoryConsistent = verifyConsistency({ firstSize: directoryBefore.tree_size, secondSize: directoryNow.tree_size, firstRoot: directoryBefore.root_hash, secondRoot: directoryNow.root_hash, proof: rc.proof });
+    n.act('Auditor', `checks ${regA.name}'s transparency log grew append-only from ${directoryBefore.tree_size} to ${directoryNow.tree_size} entries → ${directoryConsistent ? 'verified' : 'FAILED'}`);
+    const order = world.court.order({ caseId: 'In re Tessera Logs (accreditation review)', aaf_ids: [ev.aaf_id], counterparty: exchange.id, requester: 'Directory A accreditation board' });
+    const traced = await world.court.trace(regA, { order, aaf_id: ev.aaf_id });
+    n.act('Investigators', `still trace the agent through the directory → ${traced.result.principal.identity.legal_name}; the directory's record never depended on Tessera`);
+    n.expect(directoryConsistent && traced.result.principal.identity.legal_name === 'Ostrander Supply Co.', 'directory log verified append-only; the investigation proceeds without the compromised records service');
   },
 };

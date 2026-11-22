@@ -1,29 +1,29 @@
 {
   "offer": {
-    "offer_id": "xfr_sn6re59ks8ncnyh0tnw0",
-    "registration_id": "reg_8rmfjcqpw2pe1624c73r88rnp8",
-    "to_principal": "prn_918c01ab4x24mfak5r1d3hk0a0",
+    "offer_id": "xfr_a85g5jex5hjvpfzks4c0",
+    "registration_id": "reg_r1kdds8vthmj9gg98jgcgpzw0c",
+    "to_principal": "prn_c4kyhw1a5g2vkbjbsa9kavexrc",
     "subtree": "move",
-    "expires_at": "2026-11-28T23:27:05.997Z"
+    "expires_at": "2026-11-29T14:24:50.559Z"
   },
   "accepted": {
-    "registration_id": "reg_8rmfjcqpw2pe1624c73r88rnp8",
+    "registration_id": "reg_r1kdds8vthmj9gg98jgcgpzw0c",
     "receipt": {
       "header": {
         "alg": "EdDSA",
         "typ": "aaf-registration+jwt",
-        "kid": "a3hf99jI9Qk-nwDIr6rnULIMV4DrpnrpI9FtXD9Ay6w"
+        "kid": "IERSqGpw2x6fPgrrYLDzE-8aEGx4OhhZ9lFk7M1yZbs"
       },
       "payload": {
-        "iss": "https://registry-a.aaf.test",
-        "sub": "reg_8rmfjcqpw2pe1624c73r88rnp8",
-        "iat": 1795303625,
-        "agent_key": "ueCK5LgEgkNIXfjesCpDuR386cKplfACOPud-afC6qw",
-        "principal": {
+        "iss": "https://directory-a.aaf.test",
+        "sub": "reg_r1kdds8vthmj9gg98jgcgpzw0c",
+        "iat": 1795357490,
+        "agent_key": "IVBa_4w73V0V2Q9cbgI6kXWgXBsdHFqebHrHxqhl5d8",
+        "parent": {
           "type": "principal",
-          "id": "prn_918c01ab4x24mfak5r1d3hk0a0",
+          "id": "prn_c4kyhw1a5g2vkbjbsa9kavexrc",
           "key_thumbprints": [
-            "ELGCBMdIBG7gY-9LIBwHLveJmirXaW-IWRgMtdNFVeA"
+            "_4q18M69dDdlzf4gACum9vZScEOKmnx_kz-O8Odttvo"
           ]
         },
         "depth": 1,
@@ -31,16 +31,16 @@
         "records": [
           {
             "role": "authorization",
-            "rk": "https://records-1.aaf.test"
+            "rs": "https://records-1.aaf.test"
           },
           {
             "role": "provenance",
-            "rk": "https://records-1.aaf.test",
-            "ref": "prov_XUR014Em3Os1vwaWv0v6Nc"
+            "rs": "https://records-1.aaf.test",
+            "ref": "prov_Xl0BugA9_H8oQv5EpmHnBr"
           },
           {
             "role": "activity",
-            "rk": "https://records-2.aaf.test"
+            "rs": "https://records-2.aaf.test"
           }
         ],
         "expires_at": null

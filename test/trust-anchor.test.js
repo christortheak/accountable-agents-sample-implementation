@@ -10,7 +10,7 @@ import { fetchTrustAnchor, discoverFederation } from '../src/lib/trust.js';
 
 // Logical entity identifier, deliberately different from where it is served.
 const TA_ID = 'https://federation.anchor.test';
-const MEMBER = 'https://registry.anchor.test';
+const MEMBER = 'https://directory.anchor.test';
 
 const legit = generateSigningKey();
 const attacker = generateSigningKey();
@@ -133,8 +133,8 @@ test('a self-asserted identity must be a meaningful iss equal to sub', async () 
   }
 });
 
-test('the standalone relying party passes its trust anchor config through: null pin is first use, null entityId is refused', async () => {
-  const { trustAnchorFrom } = await import('../src/rp/standalone.js');
+test('the standalone counterparty passes its trust anchor config through: null pin is first use, null entityId is refused', async () => {
+  const { trustAnchorFrom } = await import('../src/counterparty/standalone.js');
   const prev = process.env.AAF_STARTUP_TIMEOUT_SECONDS;
   process.env.AAF_STARTUP_TIMEOUT_SECONDS = '0';
   try {

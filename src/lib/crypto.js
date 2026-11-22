@@ -155,7 +155,7 @@ export class JoseError extends Error {
 
 // ---------------------------------------------------------------------------
 // JWE (compact, ECDH-ES direct key agreement + A256GCM, X25519)
-// Used for the "sealed registration reference": only the registry can open it.
+// Used for the "sealed registration reference": only the directory can open it.
 // ---------------------------------------------------------------------------
 
 function concatKdf(sharedSecret, keyBits, algId) {

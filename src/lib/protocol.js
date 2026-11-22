@@ -1,4 +1,4 @@
-// Wire-level constants of the agent-to-relying-party presentation protocol.
+// Wire-level constants of the agent-to-counterparty presentation protocol.
 export const HEADERS = {
   presentation: 'aaf-presentation', // base64url JSON: { v, accountability, authorization?, approval? } (SD-JWT VCs + KB-JWTs)
   // The request itself carries RFC 9421 Signature-Input / Signature and RFC 9530 Content-Digest.
@@ -6,10 +6,10 @@ export const HEADERS = {
   humanApproval: 'aaf-human-approval', // id of a passkey-approved request (human path)
   approvalRef: 'aaf-approval-ref', // id of a passkey-approved action (agent step-up)
 };
-export const RP_METADATA_PATH = '/.well-known/aaf-relying-party';
+export const COUNTERPARTY_METADATA_PATH = '/.well-known/aaf-counterparty';
 
 /**
- * Accountability classifications a relying party can reach. The paper's
+ * Accountability classifications a counterparty can reach. The paper's
  * conclusion asks a pilot to tell these cases apart; a failed lookup or an
  * unlabeled client is not treated as proof that no principal exists.
  */

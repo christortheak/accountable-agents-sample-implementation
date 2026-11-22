@@ -1,4 +1,4 @@
-// The pilot kit: the HTTPS fix, the aaf command-line tool and the standalone relying party.
+// The pilot kit: the HTTPS fix, the aaf command-line tool and the standalone counterparty.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -15,23 +15,23 @@ const run = promisify(execFile);
 
 test('behind a TLS proxy, services verify signatures against their public URL', async () => {
   const key = generateSigningKey();
-  const signed = buildSignedRequest('POST', 'https://registry.example.org/v1/things', { a: 1 }, key, { embedJwk: true });
+  const signed = buildSignedRequest('POST', 'https://directory.example.org/v1/things', { a: 1 }, key, { embedJwk: true });
   const ctx = (headers) => ({ req: { method: 'POST', url: '/v1/things' }, headers: { ...headers, host: '127.0.0.1:4101' }, rawBody: signed.body, body: JSON.parse(signed.body) });
-  const behindProxy = createSignatureVerifier({ publicBaseUrl: 'https://registry.example.org' });
+  const behindProxy = createSignatureVerifier({ publicBaseUrl: 'https://directory.example.org' });
   assert.ok((await behindProxy(ctx(signed.headers), () => null)).thumbprint);
   const naive = createSignatureVerifier();
   await assert.rejects(naive(ctx(signed.headers), () => null), /verification failed/);
 });
 
-test('aaf CLI and standalone relying party, end to end', { timeout: 90000 }, async () => {
+test('aaf CLI and standalone counterparty, end to end', { timeout: 90000 }, async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-pilot-'));
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-home-'));
   process.env.AAF_DATA_DIR = dataDir;
   const { startFederationInProcess } = await import('../src/lib/federation.js');
-  const { startStandaloneRp } = await import('../src/rp/standalone.js');
+  const { startStandaloneCounterparty } = await import('../src/counterparty/standalone.js');
   const fed = await startFederationInProcess({ dataDir, portOffset: 7000 });
-  const shopConfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/rp.local.json'), 'utf8'));
-  const shop = await startStandaloneRp({ ...shopConfig, port: 0, trustAnchor: { url: fed.trustAnchor.url } }, { quiet: true });
+  const shopConfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/counterparty.local.json'), 'utf8'));
+  const shop = await startStandaloneCounterparty({ ...shopConfig, port: 0, trustAnchor: { url: fed.trustAnchor.url } }, { quiet: true });
   const env = { ...process.env, AAF_HOME: home, AAF_DATA_DIR: dataDir };
   const aaf = async (...args) => (await run(process.execPath, [path.join(ROOT, 'src/cli/aaf.js'), ...args], { env })).stdout;
   try {
@@ -48,14 +48,14 @@ test('aaf CLI and standalone relying party, end to end', { timeout: 90000 }, asy
     await aaf('disclose', '--to', shopConfig.id, '--claims', 'legal_name');
     const disclosed = JSON.parse(await aaf('act', 'helper', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":30,"currency":"USD"}}', '--json'));
     assert.equal(disclosed.classification, 'ACCOUNTABLE_DISCLOSED');
-    const resolved = JSON.parse(await aaf('operator', 'resolve', small.ppid, '--case', 'test', '--rp', shopConfig.id));
-    assert.equal(resolved.root_principal.identity.legal_name, 'Test Author');
+    const traced = JSON.parse(await aaf('operator', 'trace', small.aaf_id, '--case', 'test', '--counterparty', shopConfig.id));
+    assert.equal(traced.principal.identity.legal_name, 'Test Author');
     // A (demonstration) legal order has the directory revoke the agent behind an ID, and the principal is told.
     await aaf('agent', 'register', 'second');
     await aaf('grant', 'second', 'commerce.purchase', '--max-amount', '50:USD');
     const other = JSON.parse(await aaf('act', 'second', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":5,"currency":"USD"}}', '--json'));
-    assert.match(other.ppid, /^aaf:registry-a\.aaf\.test:p_/);
-    assert.match(await aaf('operator', 'revoke', other.ppid, '--case', 'test order'), /revoked.*test order/);
+    assert.match(other.aaf_id, /^aaf:directory-a\.aaf\.test:p_/);
+    assert.match(await aaf('operator', 'revoke', other.aaf_id, '--case', 'test order'), /revoked.*test order/);
     await assert.rejects(aaf('act', 'second', shop.url, 'commerce.purchase', '--params', '{"amount":{"value":5,"currency":"USD"}}'), /revoked/);
     assert.match(await aaf('notifications'), /revocation_order/);
     assert.match(await aaf('revoke', 'helper', '--reason', 'compromised'), /revoked/);
@@ -71,7 +71,7 @@ test('aaf CLI and standalone relying party, end to end', { timeout: 90000 }, asy
     await again('init', '--local');
     await again('enroll', '--name', 'Test Author');
     await assert.rejects(again('operator', 'verify', path.join(home2, 'verification-request.json')), /already has a principal record/);
-    const adminUrl = fed.trustList.registry('https://registry-a.aaf.test').url;
+    const adminUrl = fed.trustList.directory('https://directory-a.aaf.test').url;
     assert.match(await aaf('operator', 'close-principal', principalId, '--admin-url', adminUrl), /closed/);
     assert.match(await again('operator', 'verify', path.join(home2, 'verification-request.json')), /Verified Test Author/);
   } finally {

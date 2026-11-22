@@ -1,21 +1,21 @@
 {
   "options": {
-    "request_id": "wa_43bbvzpxxwswgcx2n5pg",
+    "request_id": "wa_mgwwjqqttfsjksdpnmgg",
     "details": {
-      "designation_id": "dsg_bspcz6s6ehsjy43y4620",
+      "designation_id": "dsg_pcehd9g86yq75kvmy9a0",
       "role": "designated-officer",
-      "ppid": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm",
+      "aaf_id": "aaf:directory-a.aaf.test:p_pdz5mx2grz8kr498ahg5ny9pn4",
       "action": "commerce.purchase",
       "subject_digest": "example-digest",
       "note": null
     },
     "publicKey": {
       "rpId": "records-1.aaf.test",
-      "challenge": "hGZbOV3XmyBXorLR0x-B5_lC-SxEvdI0UhcMryIfnKI",
+      "challenge": "B9V2Ss1KSG-E5DLcr0meg5sndVeLFnLgISZybsychfg",
       "allowCredentials": [
         {
           "type": "public-key",
-          "id": "bXrrgOWcCYdVa3YB-xsKn3USgvk7nSVqBn_7WgJvLz8"
+          "id": "spCS04NcAs4cPvMhvcXX23-C-lkRx6V_89CrYwYT4xQ"
         }
       ],
       "userVerification": "required",
@@ -23,10 +23,10 @@
     }
   },
   "assertion": {
-    "id": "bXrrgOWcCYdVa3YB-xsKn3USgvk7nSVqBn_7WgJvLz8",
+    "id": "spCS04NcAs4cPvMhvcXX23-C-lkRx6V_89CrYwYT4xQ",
     "clientDataJSON": {
       "type": "webauthn.get",
-      "challenge": "hGZbOV3XmyBXorLR0x-B5_lC-SxEvdI0UhcMryIfnKI",
+      "challenge": "B9V2Ss1KSG-E5DLcr0meg5sndVeLFnLgISZybsychfg",
       "origin": "https://records-1.aaf.test",
       "crossOrigin": false
     },
@@ -38,6 +38,6 @@
       },
       "signCount": 1
     },
-    "signature": "MEQCIFfIUbWoXNpS7nav1Q0ePg3qsT…"
+    "signature": "MEUCIEzHNl6adFzCn-mAKgLY28OcZP…"
   }
 }

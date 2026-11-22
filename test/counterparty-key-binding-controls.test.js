@@ -10,41 +10,41 @@ import { buildSignedRequest, createSignatureVerifier } from '../src/lib/http.js'
 import { statusListToken, STATUS } from '../src/lib/status-list.js';
 import { SD_JWT_VC_TYP, vct, AGENT_SIGNATURE_TAG, AGENT_SIGNED_COMPONENTS } from '../src/lib/credentials.js';
 import { HEADERS, CLASSIFICATION as C } from '../src/lib/protocol.js';
-import { createVerifier } from '../src/rp/verifier.js';
+import { createVerifier } from '../src/counterparty/verifier.js';
 
 const TA = 'https://ta.example';
-const REG = 'https://registry.example';
-const RP = 'https://rp.example';
-const URL = `${RP}/api/action`;
+const REG = 'https://directory.example';
+const counterparty = 'https://counterparty.example';
+const URL = `${counterparty}/api/action`;
 const STATUS_URI = `${REG}/status/1`;
 const HOLDER_CHECK = 'request signed by the credential holder (RFC 9421 + key binding)';
 
 function world() {
-  const registryKey = generateSigningKey();
+  const directoryKey = generateSigningKey();
   const holder = generateSigningKey();
-  const registry = { id: REG, jwks: { keys: [registryKey.publicJwk] } };
-  const statusToken = statusListToken({ issuer: REG, key: registryKey, uri: STATUS_URI, values: new Map([[7, STATUS.VALID]]), ttl: 60 });
+  const directory = { id: REG, jwks: { keys: [directoryKey.publicJwk] } };
+  const statusToken = statusListToken({ issuer: REG, key: directoryKey, uri: STATUS_URI, values: new Map([[7, STATUS.VALID]]), ttl: 60 });
   const trust = {
     trustAnchor: { entity_id: TA },
-    registry: (id) => (id === REG ? registry : null),
-    recordKeeper: () => null,
+    directory: (id) => (id === REG ? directory : null),
+    recordsService: () => null,
     trustMarkIssuers: () => [],
     signingKey: (entity, kid) => entity?.jwks.keys.find((k) => !kid || k.kid === kid) ?? null,
     locate: () => `data:text/plain,${statusToken}`,
   };
   const now = nowSeconds();
   const credential = present(issueSdJwt({
-    vct: vct(TA, 'accountability'), iss: REG, sub: 'aaf:registry.example:p_holder', aud: RP, iat: now, exp: now + 600,
+    vct: vct(TA, 'accountability'), iss: REG, sub: 'aaf:directory.example:p_holder', aud: counterparty, iat: now, exp: now + 600,
     cnf: { jwk: publicOf(holder.publicJwk) }, id_mode: 'pairwise',
     accountability: { status: 'accountable', principal_type: 'legal_person', chain_length: 1, attributes: [] },
     status: { status_list: { idx: 7, uri: STATUS_URI } },
-  }, registryKey, { typ: SD_JWT_VC_TYP }), () => true);
-  return { holder, credential, verifier: createVerifier({ rpId: RP, trust }) };
+  }, directoryKey, { typ: SD_JWT_VC_TYP }), () => true);
+  return { holder, credential, verifier: createVerifier({ counterpartyId: counterparty, trust }) };
 }
 
 /** An agent request; every binding input can be overridden. */
 function agentRequest(w, { key = w.holder, keyid, nonce = `n_${Math.random().toString(36).slice(2, 14)}`, kb = {}, params = { amount: 1 }, embed = false } = {}) {
-  const presented = kb.raw ?? addKeyBinding(w.credential, w.holder, { aud: kb.aud ?? RP, nonce: kb.nonce ?? nonce, ...(kb.iat !== undefined ? { iat: kb.iat } : {}) });
+  const presented = kb.raw ?? addKeyBinding(w.credential, w.holder, { aud: kb.aud ?? counterparty, nonce: kb.nonce ?? nonce, ...(kb.iat !== undefined ? { iat: kb.iat } : {}) });
   const presentation = Buffer.from(JSON.stringify({ v: 2, accountability: presented })).toString('base64url');
   const body = JSON.stringify(embed ? { ...params, signer_jwk: publicOf(key.publicJwk) } : params);
   const headers = signRequest({
@@ -65,19 +65,19 @@ const rejected = (out, re) => {
 
 /** A KB-JWT with an arbitrary iat value (including ones addKeyBinding cannot produce). */
 const kbWithIat = (w, nonce, iat) => {
-  const claims = { aud: RP, nonce, sd_hash: sdHash(w.credential) };
+  const claims = { aud: counterparty, nonce, sd_hash: sdHash(w.credential) };
   if (iat !== undefined) claims.iat = iat;
   return w.credential + signJws(claims, w.holder, { typ: KB_JWT_TYP });
 };
 
-test('RP accepts a cnf-signed agent request once and rejects its replay', async () => {
+test('counterparty accepts a cnf-signed agent request once and rejects its replay', async () => {
   const w = world();
   const req = agentRequest(w);
   assert.ok(accepted(await send(w, req)));
   rejected(await send(w, req), /replayed_request/);
 });
 
-test('RP replay identity is the verified key, not the keyid spelling', async () => {
+test('counterparty replay identity is the verified key, not the keyid spelling', async () => {
   const w = world();
   const req = agentRequest(w);
   assert.ok(accepted(await send(w, req)));
@@ -86,7 +86,7 @@ test('RP replay identity is the verified key, not the keyid spelling', async () 
   rejected(await send(w, agentRequest(w, { nonce: req.nonce })), /replayed_request/);
 });
 
-test('RP rejects alternate keyid spellings and a wrong signer even with a fresh nonce', async () => {
+test('counterparty rejects alternate keyid spellings and a wrong signer even with a fresh nonce', async () => {
   const w = world();
   const attacker = generateSigningKey();
   rejected(await send(w, agentRequest(w, { key: attacker, keyid: `jkt:${attacker.kid}`, embed: true })), /does not hold/);
@@ -96,26 +96,26 @@ test('RP rejects alternate keyid spellings and a wrong signer even with a fresh 
   assert.ok(accepted(await send(w, agentRequest(w))));
 });
 
-test('RP binds the signature to body and target; invalid signatures do not consume the nonce', async () => {
+test('counterparty binds the signature to body and target; invalid signatures do not consume the nonce', async () => {
   const w = world();
   const req = agentRequest(w);
   rejected(await send(w, req, { body: JSON.stringify({ amount: 900 }) }), /does not hold/);
-  rejected(await send(w, req, { url: `${RP}/api/other` }), /does not hold/);
+  rejected(await send(w, req, { url: `${counterparty}/api/other` }), /does not hold/);
   const forged = { ...req, headers: { ...req.headers, signature: req.headers.signature.replace(/:(.)/, (_, c) => `:${c === 'A' ? 'B' : 'A'}`) } };
   rejected(await send(w, forged), /does not hold/);
   assert.ok(accepted(await send(w, req)));
 });
 
-test('RP failed key binding does not consume the nonce', async () => {
+test('counterparty failed key binding does not consume the nonce', async () => {
   const w = world();
   const nonce = 'n_bindingretry1';
-  rejected(await send(w, agentRequest(w, { nonce, kb: { aud: 'https://other-rp.example' } })), /kb_wrong_audience|audience/);
+  rejected(await send(w, agentRequest(w, { nonce, kb: { aud: 'https://other-counterparty.example' } })), /kb_wrong_audience|audience/);
   rejected(await send(w, agentRequest(w, { nonce, kb: { nonce: 'n_somethingelse' } })), /nonce/);
   rejected(await send(w, agentRequest(w, { nonce, kb: { iat: nowSeconds() - 3600 } })), /stale/);
   assert.ok(accepted(await send(w, agentRequest(w, { nonce }))));
 });
 
-test('RP requires a finite numeric KB-JWT iat within the freshness window', async () => {
+test('counterparty requires a finite numeric KB-JWT iat within the freshness window', async () => {
   const w = world();
   const now = nowSeconds();
   const bad = [undefined, null, String(now), 'NaN', true, [now], { t: now }, now - 120, now + 120, now - 60.5, 1e308, -1e308];
@@ -134,8 +134,8 @@ test('SD-JWT key binding rejects missing and malformed iat', () => {
   const issuer = generateSigningKey();
   const holder = generateSigningKey();
   const presented = present(issueSdJwt({ cnf: { jwk: holder.publicJwk }, name: sd('Dana') }, issuer), () => true);
-  const kb = (iat) => presented + signJws({ ...(iat !== undefined ? { iat } : {}), aud: 'rp', nonce: 'n1', sd_hash: sdHash(presented) }, holder, { typ: KB_JWT_TYP });
-  const opts = { keyBinding: { aud: 'rp', nonce: 'n1' } };
+  const kb = (iat) => presented + signJws({ ...(iat !== undefined ? { iat } : {}), aud: 'counterparty', nonce: 'n1', sd_hash: sdHash(presented) }, holder, { typ: KB_JWT_TYP });
+  const opts = { keyBinding: { aud: 'counterparty', nonce: 'n1' } };
   const now = nowSeconds();
   for (const iat of [undefined, null, String(now), 'NaN', true, [now], {}]) assert.throws(() => verifySdJwt(kb(iat), issuer.publicJwk, opts), /iat must be a NumericDate/);
   assert.throws(() => verifySdJwt(kb(now - 600), issuer.publicJwk, opts), /stale/);
