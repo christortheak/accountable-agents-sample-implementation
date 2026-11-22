@@ -9,33 +9,33 @@
   },
   "services": [
     {
-      "id": "https://registry-a.aaf.test",
-      "kind": "registry",
-      "name": "Registry A (United States)",
+      "id": "https://directory-a.aaf.test",
+      "kind": "directory",
+      "name": "Directory A (United States)",
       "jurisdiction": "US",
       "port": 4101
     },
     {
-      "id": "https://registry-b.aaf.test",
-      "kind": "registry",
-      "name": "Registry B (European Union)",
+      "id": "https://directory-b.aaf.test",
+      "kind": "directory",
+      "name": "Directory B (European Union)",
       "jurisdiction": "EU",
       "port": 4102
     },
     {
       "id": "https://records-1.aaf.test",
-      "kind": "record-keeper",
+      "kind": "records-service",
       "name": "Ledgerline Records (authorization + provenance)",
       "roles": ["authorization", "provenance"],
-      "accreditedBy": ["https://registry-a.aaf.test", "https://registry-b.aaf.test"],
+      "accreditedBy": ["https://directory-a.aaf.test", "https://directory-b.aaf.test"],
       "port": 4201
     },
     {
       "id": "https://records-2.aaf.test",
-      "kind": "record-keeper",
+      "kind": "records-service",
       "name": "Tessera Logs (activity)",
       "roles": ["activity"],
-      "accreditedBy": ["https://registry-a.aaf.test", "https://registry-b.aaf.test"],
+      "accreditedBy": ["https://directory-a.aaf.test", "https://directory-b.aaf.test"],
       "allowTamperSimulation": true,
       "port": 4202
     }
@@ -48,12 +48,12 @@
     },
     {
       "id": "https://court.sdny.test",
-      "kind": "resolution-authority",
+      "kind": "designated-authority",
       "name": "U.S. District Court (simulated)"
     },
     {
       "id": "https://fincen.test",
-      "kind": "resolution-authority",
+      "kind": "designated-authority",
       "name": "Financial crimes regulator (simulated)"
     }
   ],

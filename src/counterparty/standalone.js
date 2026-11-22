@@ -1,9 +1,9 @@
-// A standalone relying party for live transactions:
-//   node src/rp/standalone.js --config config/rp.local.json
+// A standalone counterparty for live transactions:
+//   node src/counterparty/standalone.js --config config/counterparty.local.json
 //
 // Policy comes from the config file. Nothing real is bought or provided: each
 // allowed action returns a reference number. The home page shows every
-// decision, the checks behind it, and what the relying party learned.
+// decision, the checks behind it, and what the counterparty learned.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,7 @@ import { html } from '../lib/http.js';
 import { discoverWithRetry, fetchTrustAnchor, loadTrustAnchor, fileNameFor, DATA_DIR } from '../lib/trust.js';
 import { page, table, tiles, esc } from '../lib/dashboard.js';
 import { describePermission } from '../lib/scope.js';
-import { startRelyingParty } from './server.js';
+import { startCounterparty } from './server.js';
 import { whatWasLearned } from './learned.js';
 
 const OPS = {
@@ -31,9 +31,9 @@ function rulesFrom(config) {
   return Object.fromEntries(Object.entries(config.rules).map(([action, tiers]) => [action, tiers.map((t) => ({ ...t, when: predicate(t.when) }))]));
 }
 
-/** Keep the relying party's signing key across restarts, so its log entries stay attributable. */
+/** Keep the counterparty's signing key across restarts, so its log entries stay attributable. */
 function persistentKey(id) {
-  const file = path.join(DATA_DIR, `rp-${fileNameFor(id)}.json`);
+  const file = path.join(DATA_DIR, `counterparty-${fileNameFor(id)}.json`);
   if (fs.existsSync(file)) return keyFromJwk(JSON.parse(fs.readFileSync(file, 'utf8')).signing);
   const key = generateSigningKey();
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -55,9 +55,9 @@ export async function trustAnchorFrom(config) {
   }
 }
 
-export async function startStandaloneRp(config, { quiet = false } = {}) {
+export async function startStandaloneCounterparty(config, { quiet = false } = {}) {
   const trust = await discoverWithRetry(await trustAnchorFrom(config));
-  const rp = await startRelyingParty({
+  const counterparty = await startCounterparty({
     id: config.id,
     name: config.name,
     port: config.port,
@@ -66,7 +66,7 @@ export async function startStandaloneRp(config, { quiet = false } = {}) {
     key: persistentKey(config.id),
     trust,
     requests: config.requests ?? {},
-    acceptedRegistries: config.acceptedRegistries ?? null,
+    acceptedDirectories: config.acceptedDirectories ?? null,
     rules: rulesFrom(config),
     handlers: Object.fromEntries(Object.keys(config.rules).map((action) => [action, async () => ({ reference: randomId('ref', 8), note: 'simulated: nothing real was bought or provided' })])),
     routes: (app, self) => {
@@ -76,16 +76,16 @@ export async function startStandaloneRp(config, { quiet = false } = {}) {
   });
   // Keep the evidence list bounded in a long-running process.
   setInterval(() => {
-    if (rp.evidence.length > 1000) rp.evidence.splice(0, rp.evidence.length - 1000);
-    if (rp.received.length > 1000) rp.received.splice(0, rp.received.length - 1000);
+    if (counterparty.evidence.length > 1000) counterparty.evidence.splice(0, counterparty.evidence.length - 1000);
+    if (counterparty.received.length > 1000) counterparty.received.splice(0, counterparty.received.length - 1000);
   }, 60000).unref();
-  if (!quiet) console.log(`[${config.id}] ${config.name} listening on ${rp.url} (port ${config.port})`);
-  return rp;
+  if (!quiet) console.log(`[${config.id}] ${config.name} listening on ${counterparty.url} (port ${config.port})`);
+  return counterparty;
 }
 
-function dashboard(rp, config) {
-  const recent = rp.evidence.slice(-40).reverse();
-  const count = (d) => rp.evidence.filter((e) => e.decision === d).length;
+function dashboard(counterparty, config) {
+  const recent = counterparty.evidence.slice(-40).reverse();
+  const count = (d) => counterparty.evidence.filter((e) => e.decision === d).length;
   const policyRows = Object.entries(config.rules).flatMap(([action, tiers]) =>
     tiers.map((t) => [
       `<code>${esc(action)}</code>`,
@@ -94,14 +94,14 @@ function dashboard(rp, config) {
       esc(Object.entries(t.require).map(([k, v]) => `${k}: ${v}`).join(', ')),
     ]),
   );
-  return page(config.name, `${rp.id} · a relying party in an Accountable Agents federation · simulated: nothing real is bought`, [
-    tiles([['decisions', rp.evidence.length], ['allowed', count('allow')], ['denied', count('deny')], ['step-up or deferred', count('step_up') + count('deferred')]]),
+  return page(config.name, `${counterparty.id} · a counterparty in an Accountable Agents federation · simulated: nothing real is bought`, [
+    tiles([['decisions', counterparty.evidence.length], ['allowed', count('allow')], ['denied', count('deny')], ['step-up or deferred', count('step_up') + count('deferred')]]),
     '<h2>Policy</h2>',
     table(['action', 'tier', 'when', 'requires'], policyRows),
     '<h2>Recent decisions</h2>',
     recent.length
       ? table(
-          ['time', 'action', 'decision', 'what this relying party learned', 'why'],
+          ['time', 'action', 'decision', 'what this counterparty learned', 'why'],
           recent.map((e) => [
             esc(e.at.slice(11, 19)),
             `<code>${esc(e.action)}</code>`,
@@ -110,12 +110,12 @@ function dashboard(rp, config) {
             esc((e.reasons ?? []).join('; ') || (e.authority_relied_on?.length ? `authorized: ${e.authority_relied_on.map(describePermission).join('; ')}` : 'open to everyone')),
           ]),
         )
-      : '<p>No requests yet. Try: <code>aaf act &lt;agent&gt; ' + esc(rp.url) + ' &lt;action&gt;</code></p>',
+      : '<p>No requests yet. Try: <code>aaf act &lt;agent&gt; ' + esc(counterparty.url) + ' &lt;action&gt;</code></p>',
   ]);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const i = process.argv.indexOf('--config');
-  const configFile = i > 0 ? process.argv[i + 1] : 'config/rp.local.json';
-  await startStandaloneRp(JSON.parse(fs.readFileSync(path.resolve(configFile), 'utf8')));
+  const configFile = i > 0 ? process.argv[i + 1] : 'config/counterparty.local.json';
+  await startStandaloneCounterparty(JSON.parse(fs.readFileSync(path.resolve(configFile), 'utf8')));
 }

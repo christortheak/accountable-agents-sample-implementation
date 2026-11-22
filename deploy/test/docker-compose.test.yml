@@ -19,11 +19,11 @@ services:
 
   shop:
     image: aaf-pilot-test
-    command: [sh, -c, 'until [ -s /ca/root.crt ]; do sleep 1; done; exec node src/rp/standalone.js --config /app/config/rp.pilot.json']
+    command: [sh, -c, 'until [ -s /ca/root.crt ]; do sleep 1; done; exec node src/counterparty/standalone.js --config /app/config/counterparty.pilot.json']
     environment:
       NODE_EXTRA_CA_CERTS: /ca/root.crt
     volumes:
-      - ./test/out/rp.pilot.json:/app/config/rp.pilot.json:ro
+      - ./test/out/counterparty.pilot.json:/app/config/counterparty.pilot.json:ro
       - test-ca:/ca:ro
 
   caddy:
@@ -31,7 +31,7 @@ services:
     env_file: !reset []
     environment:
       FEDERATION_DOMAIN: federation.pilot.test
-      REGISTRY_DOMAIN: registry.pilot.test
+      DIRECTORY_DOMAIN: directory.pilot.test
       RECORDS_DOMAIN: records.pilot.test
       SHOP_DOMAIN: shop.pilot.test
     volumes:
@@ -39,7 +39,7 @@ services:
       - ./Caddyfile:/etc/caddy/pilot.caddyfile:ro
     networks:
       default:
-        aliases: [federation.pilot.test, registry.pilot.test, records.pilot.test, shop.pilot.test]
+        aliases: [federation.pilot.test, directory.pilot.test, records.pilot.test, shop.pilot.test]
 
   # Caddy keeps its root certificate readable only by root; copy it where the Node containers can read it.
   ca:

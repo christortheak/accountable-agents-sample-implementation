@@ -15,37 +15,37 @@ import { postJson, getJson, ServiceError } from '../src/lib/http.js';
 import { issueSdJwt, sd, sdPad, splitSdJwt, verifySdJwt } from '../src/lib/sd-jwt.js';
 import { Principal } from '../src/actors/principal.js';
 import { Agent } from '../src/actors/agent.js';
-import { IdentityVerifier, ResolutionAuthority } from '../src/actors/authorities.js';
-import { TYP, AGENT_PROOF_PURPOSE, ORDER_SCOPE_REVOKE, identityKey } from '../src/registry/registry.js';
-import { startRelyingParty } from '../src/rp/server.js';
+import { IdentityVerifier, DesignatedAuthority } from '../src/actors/authorities.js';
+import { TYP, AGENT_PROOF_PURPOSE, ORDER_SCOPE_REVOKE, identityKey } from '../src/directory/directory.js';
+import { startCounterparty } from '../src/counterparty/server.js';
 
-const REG_A = 'https://registry-a.aaf.test';
-const REG_B = 'https://registry-b.aaf.test';
+const REG_A = 'https://directory-a.aaf.test';
+const REG_B = 'https://directory-b.aaf.test';
 const KYC = 'https://kyc.verifier.test';
 const COURT = 'https://court.sdny.test';
 
-let fed; let trust; let regA; let rk; let kyc; let court; let adminToken;
-const rps = [];
-const records = () => [{ role: 'authorization', rk: rk.id }];
+let fed; let trust; let regA; let rs; let kyc; let court; let adminToken;
+const counterparties = [];
+const records = () => [{ role: 'authorization', rs: rs.id }];
 
 before(async () => {
   fed = await startFederationInProcess({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'aaf-test-')), portOffset: 9000 });
   trust = fed.trustList;
-  regA = trust.registry(REG_A);
-  rk = trust.recordKeeper('https://records-1.aaf.test');
+  regA = trust.directory(REG_A);
+  rs = trust.recordsService('https://records-1.aaf.test');
   kyc = new IdentityVerifier({ id: KYC, keys: loadKeys(KYC, fed.paths.keysDir) });
-  court = new ResolutionAuthority({ id: COURT, name: 'court', keys: loadKeys(COURT, fed.paths.keysDir) });
+  court = new DesignatedAuthority({ id: COURT, name: 'court', keys: loadKeys(COURT, fed.paths.keysDir) });
   adminToken = loadKeys(REG_A, fed.paths.keysDir).adminToken;
 });
 after(async () => {
-  await Promise.all(rps.map((rp) => rp.close()));
+  await Promise.all(counterparties.map((counterparty) => counterparty.close()));
   await fed.close();
 });
 
 const code = (c) => (e) => e instanceof ServiceError && e.code === c;
 
-async function principal(identity, { type = 'legal_person', registry = regA, verify = true } = {}) {
-  const p = new Principal({ type, identity, registry, trust });
+async function principal(identity, { type = 'legal_person', directory = regA, verify = true } = {}) {
+  const p = new Principal({ type, identity, directory, trust });
   await p.enroll();
   if (verify) await kyc.verify(p, { assurance: type === 'natural_person' ? 'IAL2' : 'high', method: 'test' });
   return p;
@@ -54,21 +54,21 @@ async function principal(identity, { type = 'legal_person', registry = regA, ver
 async function agentOf(p, name, grant = { permissions: [{ action: 'commerce.purchase' }] }) {
   const a = new Agent({ name, trust });
   await p.registerAgent(a, { label: name, records: records() });
-  if (grant) await p.grant(a, { rk, ...grant });
+  if (grant) await p.grant(a, { rs, ...grant });
   return a;
 }
 
 async function shop(opts) {
-  const rp = await startRelyingParty({ trust, handlers: { 'commerce.purchase': async () => ({ ok: true }) }, ...opts });
-  rps.push(rp);
-  return rp;
+  const counterparty = await startCounterparty({ trust, handlers: { 'commerce.purchase': async () => ({ ok: true }) }, ...opts });
+  counterparties.push(counterparty);
+  return counterparty;
 }
 
 test('PV-3: one verified identity has one principal record; a closed record frees the identity and keeps its history', { timeout: 30000 }, async () => {
   const identity = { legal_name: 'Acme Robotics Ltd', jurisdiction: 'US-DE', registration_number: 'DE-4471' };
   const first = await principal(identity);
   const agent = await agentOf(first, 'acme-agent');
-  const before = await agent.contextFor('rp.example');
+  const before = await agent.contextFor('counterparty.example');
 
   // The same company, spelled differently, enrolling again: refused when its identity is verified.
   const second = await principal({ ...identity, legal_name: 'ACME Robotics, Limited' }, { verify: false });
@@ -85,11 +85,11 @@ test('PV-3: one verified identity has one principal record; a closed record free
   await kyc.verify(second, { assurance: 'high', method: 'test' });
 
   // The closed record's agent stops working, but an ID it used can still be attributed (ES-1).
-  await assert.rejects(agent.contextFor('other-rp.example'), code('registration_inactive'));
-  const order = court.order({ caseId: 'test', ppids: [before.ppid], requester: 'test' });
-  const res = await court.resolve(regA, { order, ppid: before.ppid });
-  assert.equal(res.result.root_principal.principal_id, first.id);
-  assert.equal(res.result.ppid_status, 'suspended');
+  await assert.rejects(agent.contextFor('other-counterparty.example'), code('registration_inactive'));
+  const order = court.order({ caseId: 'test', aaf_ids: [before.aaf_id], requester: 'test' });
+  const res = await court.trace(regA, { order, aaf_id: before.aaf_id });
+  assert.equal(res.result.principal.principal_id, first.id);
+  assert.equal(res.result.id_status, 'suspended');
 
   // The sample key: entities by registration number, people by name, jurisdiction and date of birth.
   assert.equal(identityKey('legal_person', identity), identityKey('legal_person', { ...identity, legal_name: 'anything' }));
@@ -119,7 +119,7 @@ test('AG-2: an agent is registered only with proof that it holds its key, made f
   await assert.rejects(p.call(`${regA.url}/v1/registrations/${ok.registration_id}/rotate-key`, { agent_jwk: publicOf(generateSigningKey().publicJwk) }), code('agent_proof_required'));
   const a = await agentOf(p, 'rotating', null);
   await p.rotateAgentKey(a);
-  await a.contextFor('rp.example');
+  await a.contextFor('counterparty.example');
 });
 
 test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty asks for more, and sets its own criteria', { timeout: 30000 }, async () => {
@@ -133,9 +133,9 @@ test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty as
   assert.equal(r1.decision, 'allow');
   const ev = open.evidence.at(-1);
   // The shop asked for nothing, so it learned the ID and the directory, and nothing about the principal or the chain.
-  assert.match(ev.ppid, /^aaf:registry-a\.aaf\.test:p_/);
+  assert.match(ev.aaf_id, /^aaf:directory-a\.aaf\.test:p_/);
   assert.equal(ev.id_mode, 'pairwise');
-  assert.deepEqual(ev.root, { type: null, trust_framework: null, assurance: null, verifier: null, directory: null, identity: null });
+  assert.deepEqual(ev.principal, { type: null, trust_framework: null, assurance: null, verifier: null, directory: null, identity: null });
   assert.equal(ev.chain_length, null);
   assert.equal(splitSdJwt(r1.presentation.accountability).disclosures.length, 0);
 
@@ -149,7 +149,7 @@ test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty as
   const r1b = await orgAgent.act(open.url, 'commerce.purchase', {});
   const r2 = await personAgent.act(open.url, 'commerce.purchase', {});
   assert.deepEqual(shape(r1b), shape(r2));
-  assert.equal(open.evidence.at(-2).root.identity, null, 'identity is not volunteered when the shop does not ask for it');
+  assert.equal(open.evidence.at(-2).principal.identity, null, 'identity is not volunteered when the shop does not ask for it');
 
   // A stricter counterparty: organizations only, proofed to "high", at most one link. Its tier's needs are asked for and shown.
   const strict = await shop({
@@ -159,10 +159,10 @@ test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty as
   const s1 = await orgAgent.act(strict.url, 'commerce.purchase', {});
   assert.equal(s1.decision, 'allow');
   const sev = strict.evidence.at(-1);
-  assert.equal(sev.root.type, 'legal_person');
-  assert.equal(sev.root.assurance, 'high');
+  assert.equal(sev.principal.type, 'legal_person');
+  assert.equal(sev.principal.assurance, 'high');
   assert.equal(sev.chain_length, 1);
-  assert.equal(sev.root.verifier, null, 'not asked for, so not shown');
+  assert.equal(sev.principal.verifier, null, 'not asked for, so not shown');
   // An agent that withholds what the tier needs is asked for it; it is not refused outright.
   const s2 = await orgAgent.act(strict.url, 'commerce.purchase', {}, { disclose: { principal_type: false } });
   assert.equal(s2.decision, 'step_up');
@@ -172,7 +172,7 @@ test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty as
   assert.equal(s3.decision, 'deny');
   assert.match(s3.reasons.join(' '), /only legal person principals/);
   // A sub-agent is one link too many here.
-  await org.grant(orgAgent, { rk, permissions: [{ action: 'commerce.purchase' }], delegation: { allowed: true, max_depth: 1 } });
+  await org.grant(orgAgent, { rs, permissions: [{ action: 'commerce.purchase' }], delegation: { allowed: true, max_depth: 1 } });
   const sub = new Agent({ name: 'sub', trust });
   await orgAgent.registerSubagent(sub, { label: 'sub', records: records() });
   await orgAgent.delegate(sub, { permissions: [{ action: 'commerce.purchase' }] });
@@ -181,12 +181,12 @@ test('PR-1, PR-5, PR-10: the ID alone is a valid presentation; a counterparty as
   assert.match(s4.reasons.join(' '), /chains longer than 1/);
 
   // A counterparty chooses which directories it accepts.
-  const euOnly = await shop({ id: 'eu-shop.example', name: 'EU shop', acceptedRegistries: [REG_B], rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] } });
-  assert.deepEqual((await getJson(`${euOnly.url}/.well-known/aaf-relying-party`)).accepted_registries, [REG_B]);
+  const euOnly = await shop({ id: 'eu-shop.example', name: 'EU shop', acceptedDirectories: [REG_B], rules: { 'commerce.purchase': [{ label: 'standard', require: { accountability: 'established', authorization: true } }] } });
+  assert.deepEqual((await getJson(`${euOnly.url}/.well-known/aaf-counterparty`)).accepted_directories, [REG_B]);
   const e1 = await orgAgent.act(euOnly.url, 'commerce.purchase', {});
   assert.equal(e1.decision, 'deny');
   assert.equal(e1.classification, 'UNSUPPORTED');
-  assert.match(e1.reasons.join(' '), /does not accept IDs from https:\/\/registry-a/);
+  assert.match(e1.reasons.join(' '), /does not accept IDs from https:\/\/directory-a/);
 });
 
 test('SD-JWT decoy digests hide how many claims are disclosable and are ignored on verification', () => {
@@ -207,23 +207,23 @@ test('RV-1: a legal order with the revoke scope revokes the agent behind an ID, 
   const a = await agentOf(p, 'ordered', { permissions: [{ action: 'commerce.purchase' }], delegation: { allowed: true, max_depth: 1 } });
   const child = new Agent({ name: 'ordered-child', trust });
   await a.registerSubagent(child, { label: 'child', records: records() });
-  const ctx = await a.contextFor('rp.example');
-  const single = await a.contextFor('rp.example', { mode: 'ephemeral' });
+  const ctx = await a.contextFor('counterparty.example');
+  const single = await a.contextFor('counterparty.example', { mode: 'unlinkable' });
 
   // An order to identify does not authorize revocation, and an order must name the ID.
-  const identifyOnly = court.order({ caseId: 'c-1', ppids: [ctx.ppid], requester: 'test' });
-  await assert.rejects(court.revoke(regA, { order: identifyOnly, ppid: ctx.ppid }), code('not_in_scope'));
-  const elsewhere = court.order({ caseId: 'c-1', ppids: ['aaf:registry-a.aaf.test:p_other'], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
-  await assert.rejects(court.revoke(regA, { order: elsewhere, ppid: ctx.ppid }), code('not_covered'));
-  // An order from someone who is not a recognized authority is refused.
-  const impostor = new ResolutionAuthority({ id: COURT, name: 'impostor', keys: { signing: generateSigningKey() } });
-  await assert.rejects(impostor.revoke(regA, { order: impostor.order({ caseId: 'c-1', ppids: [ctx.ppid], requester: 'x', scope: [ORDER_SCOPE_REVOKE] }), ppid: ctx.ppid }), code('invalid_order'));
+  const identifyOnly = court.order({ caseId: 'c-1', aaf_ids: [ctx.aaf_id], requester: 'test' });
+  await assert.rejects(court.revoke(regA, { order: identifyOnly, aaf_id: ctx.aaf_id }), code('not_in_scope'));
+  const elsewhere = court.order({ caseId: 'c-1', aaf_ids: ['aaf:directory-a.aaf.test:p_other'], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
+  await assert.rejects(court.revoke(regA, { order: elsewhere, aaf_id: ctx.aaf_id }), code('not_covered'));
+  // An order from someone who is not a designated authority is refused.
+  const impostor = new DesignatedAuthority({ id: COURT, name: 'impostor', keys: { signing: generateSigningKey() } });
+  await assert.rejects(impostor.revoke(regA, { order: impostor.order({ caseId: 'c-1', aaf_ids: [ctx.aaf_id], requester: 'x', scope: [ORDER_SCOPE_REVOKE] }), aaf_id: ctx.aaf_id }), code('invalid_order'));
 
   // A single-use ID needs the sealed reference the counterparty kept.
-  const order = court.order({ caseId: 'State v. Ordered Co', ppids: [single.ppid], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
-  await assert.rejects(court.revoke(regA, { order, ppid: single.ppid }), code('sealed_ref_required'));
+  const order = court.order({ caseId: 'State v. Ordered Co', aaf_ids: [single.aaf_id], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
+  await assert.rejects(court.revoke(regA, { order, aaf_id: single.aaf_id }), code('sealed_ref_required'));
   const sealedRef = decodeJws(splitSdJwt(single.attestation).jwt).payload.sealed_ref;
-  const res = await court.revoke(regA, { order, ppid: single.ppid, sealedRef });
+  const res = await court.revoke(regA, { order, aaf_id: single.aaf_id, sealedRef });
   assert.equal(res.status, 'revoked');
   assert.equal(res.reason, 'legal_order');
   assert.equal(res.cascades_to, 1);
@@ -233,18 +233,18 @@ test('RV-1: a legal order with the revoke scope revokes the agent behind an ID, 
   await assert.rejects(child.contextFor('another.example'), code('registration_inactive'));
   const note = (await p.notifications()).find((n) => n.kind === 'revocation_order');
   assert.equal(note.case, 'State v. Ordered Co');
-  assert.equal((await court.revoke(regA, { order, ppid: single.ppid, sealedRef })).already, true);
+  assert.equal((await court.revoke(regA, { order, aaf_id: single.aaf_id, sealedRef })).already, true);
 
   // After an agent changes hands, an ID from the earlier relationship cannot be used to revoke it from its new principal.
   const seller = await principal({ legal_name: 'Seller Co', jurisdiction: 'US', registration_number: 'S-1' });
   const buyer = await principal({ legal_name: 'Buyer Co', jurisdiction: 'US', registration_number: 'B-1' });
   const sold = await agentOf(seller, 'sold', null);
-  const old = await sold.contextFor('rp.example');
+  const old = await sold.contextFor('counterparty.example');
   const offer = await seller.offerTransfer(sold, buyer);
   await buyer.acceptTransfer(offer.offer_id, sold);
-  const stale = court.order({ caseId: 'c-2', ppids: [old.ppid], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
-  await assert.rejects(court.revoke(regA, { order: stale, ppid: old.ppid }), code('custody_changed'));
-  await sold.contextFor('rp.example');
+  const stale = court.order({ caseId: 'c-2', aaf_ids: [old.aaf_id], requester: 'test', scope: [ORDER_SCOPE_REVOKE] });
+  await assert.rejects(court.revoke(regA, { order: stale, aaf_id: old.aaf_id }), code('custody_changed'));
+  await sold.contextFor('counterparty.example');
 });
 
 test('DR-1: each directory publishes its practices, in its entity configuration and at /v1/practices', async () => {
@@ -258,6 +258,6 @@ test('DR-1: each directory publishes its practices, in its entity configuration 
   assert.equal(practices.records.kept_after_revocation, true);
   for (const section of ['authentication', 'revocation', 'records', 'disclosure', 'signing_keys', 'security']) assert.ok(practices[section], section);
   const ec = decodeJws(await (await fetch(`${regA.url}/.well-known/openid-federation`)).text()).payload;
-  assert.deepEqual(ec.metadata.aaf_registry.practices, practices);
-  assert.deepEqual(ec.metadata.aaf_registry.id_modes, ['pairwise', 'ephemeral']);
+  assert.deepEqual(ec.metadata.aaf_directory.practices, practices);
+  assert.deepEqual(ec.metadata.aaf_directory.id_modes, ['pairwise', 'unlinkable']);
 });

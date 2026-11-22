@@ -143,16 +143,16 @@ test('SD-JWT key binding (kb+jwt)', () => {
   const issuer = generateSigningKey();
   const holder = generateSigningKey();
   const full = issueSdJwt({ cnf: { jwk: holder.publicJwk }, name: sd('Dana') }, issuer);
-  const bound = addKeyBinding(present(full, () => false), holder, { aud: 'rp', nonce: 'n1' });
-  assert.ok(verifySdJwt(bound, issuer.publicJwk, { keyBinding: { aud: 'rp', nonce: 'n1' } }).kb);
+  const bound = addKeyBinding(present(full, () => false), holder, { aud: 'counterparty', nonce: 'n1' });
+  assert.ok(verifySdJwt(bound, issuer.publicJwk, { keyBinding: { aud: 'counterparty', nonce: 'n1' } }).kb);
   assert.throws(() => verifySdJwt(bound, issuer.publicJwk, { keyBinding: { aud: 'other', nonce: 'n1' } }), /audience/);
-  assert.throws(() => verifySdJwt(bound, issuer.publicJwk, { keyBinding: { aud: 'rp', nonce: 'n2' } }), /nonce/);
+  assert.throws(() => verifySdJwt(bound, issuer.publicJwk, { keyBinding: { aud: 'counterparty', nonce: 'n2' } }), /nonce/);
   // Adding a disclosure after binding breaks sd_hash.
   const tampered = bound.replace('~', `~${full.split('~')[1]}~`);
-  assert.throws(() => verifySdJwt(tampered, issuer.publicJwk, { keyBinding: { aud: 'rp', nonce: 'n1' } }), /cover|kb/i);
+  assert.throws(() => verifySdJwt(tampered, issuer.publicJwk, { keyBinding: { aud: 'counterparty', nonce: 'n1' } }), /cover|kb/i);
   const thief = generateSigningKey();
-  const stolen = addKeyBinding(present(full, () => false), thief, { aud: 'rp', nonce: 'n1' });
-  assert.throws(() => verifySdJwt(stolen, issuer.publicJwk, { keyBinding: { aud: 'rp', nonce: 'n1' } }), /signature/);
+  const stolen = addKeyBinding(present(full, () => false), thief, { aud: 'counterparty', nonce: 'n1' });
+  assert.throws(() => verifySdJwt(stolen, issuer.publicJwk, { keyBinding: { aud: 'counterparty', nonce: 'n1' } }), /signature/);
 });
 
 test('Token Status List encoding (2 bits per entry, zlib)', () => {
@@ -177,7 +177,7 @@ test('WebAuthn: registration and assertion with a software authenticator', async
   const created = auth.create(creationOptions({ rpId, rpName: 'ModelHub', user: { id: 'u1', name: 'admin' }, challenge: reg.challenge }), origin);
   const cred = verifyRegistration({ response: created, expectedChallenge: reg.challenge, expectedOrigin: origin, rpId });
   assert.equal(cred.publicJwk.crv, 'P-256');
-  const approve = bindingChallenge('approve-agent', { ppid: 'ppid:x', scope: 'dataset.read_private' });
+  const approve = bindingChallenge('approve-agent', { aaf_id: 'aaf:x', scope: 'dataset.read_private' });
   const assertion = auth.get(requestOptions({ rpId, challenge: approve.challenge, credentials: [cred.credentialId] }), origin);
   const ok = verifyAssertion({ response: assertion, expectedChallenge: approve.challenge, expectedOrigin: origin, rpId, credential: cred });
   assert.ok(ok.userVerified);

@@ -2,7 +2,7 @@
 #
 #   cp deploy/.env.example deploy/.env                                   (your domains)
 #   cp config/federation.pilot.example.json config/federation.pilot.json  (same domains)
-#   cp config/rp.pilot.example.json config/rp.pilot.json                  (same domains)
+#   cp config/counterparty.pilot.example.json config/counterparty.pilot.json                  (same domains)
 #   docker compose -f deploy/docker-compose.yml up -d --build
 services:
   federation:
@@ -16,12 +16,12 @@ services:
 
   shop:
     build: { context: .., dockerfile: deploy/Dockerfile }
-    command: ["node", "src/rp/standalone.js", "--config", "/app/config/rp.pilot.json"]
+    command: ["node", "src/counterparty/standalone.js", "--config", "/app/config/counterparty.pilot.json"]
     environment:
       AAF_DATA_DIR: /data
     volumes:
       - shop-data:/data
-      - ../config/rp.pilot.json:/app/config/rp.pilot.json:ro
+      - ../config/counterparty.pilot.json:/app/config/counterparty.pilot.json:ro
     depends_on: [federation]
     restart: unless-stopped
 

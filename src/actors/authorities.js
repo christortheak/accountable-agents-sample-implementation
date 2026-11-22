@@ -1,12 +1,12 @@
 // The other parties around the core: agent providers (who publish provenance
-// records), identity verifiers (who do the slow KYC/KYB step), and resolution
-// authorities (courts and regulators who can compel identity resolution).
+// records), identity verifiers (who do the slow KYC/KYB step), and attribution
+// authorities (courts and regulators who can compel identity attribution).
 import crypto from 'node:crypto';
 import { generateSigningKey, signJws, nowSeconds, randomId } from '../lib/crypto.js';
 import { identityVerifiedClaims, attributeVerifiedClaims } from '../lib/ida.js';
 import { postJson, getJson, postSigned } from '../lib/http.js';
-import { TYP as RK_TYP } from '../recordkeeper/recordkeeper.js';
-import { TYP as REGISTRY_TYP, ORDER_SCOPE_REVOKE } from '../registry/registry.js';
+import { TYP as RS_TYP } from '../records/records.js';
+import { TYP as DIRECTORY_TYP, ORDER_SCOPE_REVOKE } from '../directory/directory.js';
 
 /** The party that builds or operates agent software. */
 export class AgentProvider {
@@ -21,13 +21,13 @@ export class AgentProvider {
    * Shared by every agent running that build. components: [{ type: 'model' |
    * 'framework' | 'tool' | 'library', name, version?, supplier? }]
    */
-  async publishProvenance(rk, { build, components, incidentResponse = {} }) {
+  async publishProvenance(rs, { build, components, incidentResponse = {} }) {
     const record = signJws(
       { provider: { name: this.name, contact: this.contact }, bom: cycloneDx(this, build, components, incidentResponse), iat: nowSeconds() },
       this.key,
-      { typ: RK_TYP.provenance, embedJwk: true },
+      { typ: RS_TYP.provenance, embedJwk: true },
     );
-    const res = await postJson(`${rk.url}/v1/provenance`, { record });
+    const res = await postJson(`${rs.url}/v1/provenance`, { record });
     return { provenanceId: res.provenance_id, receipt: res.receipt };
   }
 }
@@ -55,7 +55,7 @@ export function cycloneDx(provider, build, components, incidentResponse) {
         // Incident-response instructions as CycloneDX properties.
         properties: [
           ...(incidentResponse.constrain_endpoint ? [{ name: 'aaf:incident-response:constrain-endpoint', value: incidentResponse.constrain_endpoint }] : []),
-          { name: 'aaf:incident-response:notify-principal-via', value: incidentResponse.notify_principal_via ?? 'registry' },
+          { name: 'aaf:incident-response:notify-principal-via', value: incidentResponse.notify_principal_via ?? 'directory' },
         ],
       },
     },
@@ -83,7 +83,7 @@ export class IdentityVerifier {
   async verify(principal, { assurance, method, attributes = [], validForDays = 365 }) {
     const started = Date.now();
     const res = await postSigned(
-      `${principal.registry.url}/v1/principals/${principal.id}/verification`,
+      `${principal.directory.url}/v1/principals/${principal.id}/verification`,
       {
         principal_id: principal.id,
         // OpenID Connect for Identity Assurance: what was verified, how, to what level.
@@ -98,43 +98,43 @@ export class IdentityVerifier {
   }
 }
 
-/** A court or regulator able to compel a registry to resolve an ID to its principal, or to revoke the agent behind it. */
+/** A court or regulator able to compel a directory to trace an ID to its principal, or to revoke the agent behind it. */
 export { ORDER_SCOPE_REVOKE };
 
-export class ResolutionAuthority {
+export class DesignatedAuthority {
   constructor({ id, name, keys }) {
     this.id = id;
     this.name = name;
     this.key = keys.signing;
   }
 
-  order({ caseId, ppids, relyingParty, requester, scope = ['root_principal_identity', 'chain'], notifyPrincipal = true, purpose, validForDays = 30 }) {
+  order({ caseId, aaf_ids, counterparty, requester, scope = ['principal_identity', 'chain'], notifyPrincipal = true, purpose, validForDays = 30 }) {
     const now = nowSeconds();
     return signJws(
       {
-        iss: this.id, case: caseId, ppids, relying_party: relyingParty, requester, scope,
+        iss: this.id, case: caseId, aaf_ids, counterparty: counterparty, requester, scope,
         notify_principal: notifyPrincipal, purpose, iat: now, exp: now + validForDays * 86400, jti: randomId('ord', 10),
       },
       this.key,
-      { typ: REGISTRY_TYP.order },
+      { typ: DIRECTORY_TYP.order },
     );
   }
 
-  async resolve(registry, { order, ppid, sealedRef }) {
-    return postJson(`${registry.url}/v1/resolutions`, { order, ppid, sealed_ref: sealedRef });
+  async trace(directory, { order, aaf_id, sealedRef }) {
+    return postJson(`${directory.url}/v1/attributions`, { order, aaf_id, sealed_ref: sealedRef });
   }
 
-  /** Have a registry revoke the registration behind an ID. The order must carry the revoke_registration scope. */
-  async revoke(registry, { order, ppid, sealedRef }) {
-    return postJson(`${registry.url}/v1/revocations`, { order, ppid, sealed_ref: sealedRef });
+  /** Have a directory revoke the registration behind an ID. The order must carry the revoke_registration scope. */
+  async revoke(directory, { order, aaf_id, sealedRef }) {
+    return postJson(`${directory.url}/v1/revocations`, { order, aaf_id, sealed_ref: sealedRef });
   }
 
-  /** Read activity logs covered by an order (and by related PPIDs the registry returned). */
-  async readActivity(rk, { order, subjects, resolution }) {
-    return postSigned(`${rk.url}/v1/activity/query`, { order, subjects, resolution }, this.key, { embedJwk: true });
+  /** Read activity logs covered by an order (and by related IDs the directory returned). */
+  async readActivity(rs, { order, subjects, attribution }) {
+    return postSigned(`${rs.url}/v1/activity/query`, { order, subjects, attribution }, this.key, { embedJwk: true });
   }
 
-  async transparencyHead(registry) {
-    return getJson(`${registry.url}/v1/transparency/sth`);
+  async transparencyHead(directory) {
+    return getJson(`${directory.url}/v1/transparency/sth`);
   }
 }

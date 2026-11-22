@@ -1,6 +1,6 @@
 // IETF OAuth Token Status List: a compressed bit array of credential statuses,
 // published as a signed Status List Token. A credential names its entry with
-// `status: { status_list: { idx, uri } }`. A relying party fetches the whole
+// `status: { status_list: { idx, uri } }`. A counterparty fetches the whole
 // list, so the issuer does not learn which credential is being checked.
 import zlib from 'node:zlib';
 import crypto from 'node:crypto';

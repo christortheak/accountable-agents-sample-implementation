@@ -4,7 +4,7 @@ import { verifySelfSignedJws } from '../../lib/crypto.js';
 import { short } from '../world.js';
 import { modelsIn } from '../../actors/authorities.js';
 import { AccountHolder } from '../../actors/account-holder.js';
-import { describeAccessRequest } from '../../rp/accounts.js';
+import { describeAccessRequest } from '../../counterparty/accounts.js';
 import { whatWasLearned } from '../privacy.js';
 
 const STOLEN_TOKEN = 'mh_victimorg_9f3a1c77e2';
@@ -26,7 +26,7 @@ export default {
     // accountability required for private data, authority required for account changes.
     const tokenUse = new Map(); // account token -> Set of PPIDs
     const alerts = [];
-    const modelhub = await world.relyingParty({
+    const modelhub = await world.counterparty({
       id: 'modelhub.example', name: 'ModelHub',
       requests: { provenance: true },
       rules: {
@@ -39,11 +39,11 @@ export default {
         'dataset.read_private': async (p) => ({ repo: p.repo, rows_returned: 5000, account: p.account_token === STOLEN_TOKEN ? 'victim-org' : 'unknown' }),
       },
       onDecision: ({ action, params, verification, decision }) => {
-        if (action !== 'dataset.read_private' || decision.decision !== 'allow' || !verification.ppid) return;
+        if (action !== 'dataset.read_private' || decision.decision !== 'allow' || !verification.aaf_id) return;
         const set = tokenUse.get(params.account_token) ?? new Set();
-        set.add(verification.ppid);
+        set.add(verification.aaf_id);
         tokenUse.set(params.account_token, set);
-        if (set.size >= 3 && !alerts.length) alerts.push({ at: t(), token: params.account_token, ppids: [...set] });
+        if (set.size >= 3 && !alerts.length) alerts.push({ at: t(), token: params.account_token, aaf_ids: [...set] });
       },
     });
 
@@ -59,7 +59,7 @@ export default {
     const lab = await world.verifiedPrincipal({
       type: 'legal_person',
       identity: { legal_name: 'Frontier Lab Inc.', jurisdiction: 'US-DE', registration_number: 'DE-7731940' },
-      assurance: 'high', method: 'KYB: registry extract + officer verification',
+      assurance: 'high', method: 'KYB: directory extract + officer verification',
       contact: 'security@frontierlab.example',
     });
     const { provenanceId } = await world.provider('Frontier Lab Inc.', 'security@frontierlab.example').publishProvenance(ledgerline, {
@@ -71,7 +71,7 @@ export default {
     for (let i = 1; i <= 3; i++) {
       const a = world.agent(`eval-runner-${i}`);
       await lab.registerAgent(a, { label: `eval-runner-${i}`, records: world.records(provenanceId), provider: { name: 'Frontier Lab Inc.', contact: 'security@frontierlab.example' } });
-      await lab.grant(a, { rk: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }], purpose: 'Benchmark evaluation runs' });
+      await lab.grant(a, { rs: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }], purpose: 'Benchmark evaluation runs' });
       runners.push(a);
     }
     n.act('Frontier Lab Inc.', 'runs three registered evaluation agents, authorized only to run benchmarks and read public content');
@@ -92,13 +92,13 @@ export default {
 
     n.step('Detection: one account token used by several unfamiliar agents');
     const alert = alerts[0];
-    n.act('ModelHub', `anomaly detector fires at ${alert?.at}: ${alert?.ppids.length} distinct agent PPIDs using one account token`);
+    n.act('ModelHub', `anomaly detector fires at ${alert?.at}: ${alert?.aaf_ids.length} distinct agent PPIDs using one account token`);
     n.expect(Boolean(alert), 'anomaly detected from evidence the platform already holds');
 
-    n.step('Incident report: the registry relays it to the principal without revealing who that is');
+    n.step('Incident report: the directory relays it to the principal without revealing who that is');
     const incidents = [];
-    for (const ppid of alert.ppids) {
-      incidents.push(await modelhub.fileIncident({ ppid, registry: regA, summary: 'Use of a stolen account token to read private datasets', evidence: [{ log: tessera.id }] }));
+    for (const aaf_id of alert.aaf_ids) {
+      incidents.push(await modelhub.fileIncident({ aaf_id, directory: regA, summary: 'Use of a stolen account token to read private datasets', evidence: [{ log: tessera.id }] }));
     }
     n.act('ModelHub', `files ${incidents.length} incident reports with ${regA.name}; incident-response contact returned: ${incidents[0].incident_response?.contact}`);
     const notes = (await lab.notifications()).filter((x) => x.kind === 'incident');
@@ -109,22 +109,22 @@ export default {
     n.step('Containment: Frontier Lab revokes the agents');
     for (const a of runners) await lab.revokeAgent(a, 'compromised');
     const containedAt = t();
-    const retry = await runners[1].act(modelhub.url, 'dataset.read_private', { repo: 'victim-org/held-out-evals', account_token: STOLEN_TOKEN }).catch((e) => ({ decision: 'deny', classification: 'REVOKED', reasons: [`registry refuses to issue credentials: ${e.message}`] }));
+    const retry = await runners[1].act(modelhub.url, 'dataset.read_private', { repo: 'victim-org/held-out-evals', account_token: STOLEN_TOKEN }).catch((e) => ({ decision: 'deny', classification: 'REVOKED', reasons: [`directory refuses to issue credentials: ${e.message}`] }));
     n.decision('ModelHub ← eval-runner-2 (retry)', retry);
     n.expect(retry.decision === 'deny', `attack stopped at ${containedAt}: revoked agents can neither obtain new credentials nor use cached ones`);
 
     n.step('Attribution under legal process');
     const order = world.court.order({
-      caseId: 'ModelHub, Inc. v. Does 1–3, No. 26-cv-4410', ppids: [alert.ppids[0]], relyingParty: modelhub.id,
-      requester: 'ModelHub, Inc.', scope: ['root_principal_identity', 'chain', 'related_ppids'],
+      caseId: 'ModelHub, Inc. v. Does 1–3, No. 26-cv-4410', aaf_ids: [alert.aaf_ids[0]], counterparty: modelhub.id,
+      requester: 'ModelHub, Inc.', scope: ['principal_identity', 'chain', 'related_ids'],
     });
-    const res = await world.court.resolve(regA, { order, ppid: alert.ppids[0] });
-    const root = res.result.root_principal;
-    n.act('Court', `orders ${regA.name} to resolve one PPID, including related PPIDs at ModelHub`);
-    n.detail('root principal', `${root.identity.legal_name}, ${root.identity.jurisdiction}, reg. ${root.identity.registration_number}, contact ${root.contact}`);
-    n.detail('related agents at ModelHub', `${res.result.related_ppids.length} PPIDs (the three runners)`);
+    const res = await world.court.trace(regA, { order, aaf_id: alert.aaf_ids[0] });
+    const principal = res.result.principal;
+    n.act('Court', `orders ${regA.name} to trace one PPID, including related PPIDs at ModelHub`);
+    n.detail('principal', `${principal.identity.legal_name}, ${principal.identity.jurisdiction}, reg. ${principal.identity.registration_number}, contact ${principal.contact}`);
+    n.detail('related agents at ModelHub', `${res.result.related_ids.length} PPIDs (the three runners)`);
     n.detail('registration status', res.result.chain.map((c) => `${c.label}: ${c.status}`).join(', '));
-    n.expect(root.identity.legal_name === 'Frontier Lab Inc.' && res.result.related_ppids.length === 3, 'the court identifies the principal and the full extent of its agents at ModelHub');
+    n.expect(principal.identity.legal_name === 'Frontier Lab Inc.' && res.result.related_ids.length === 3, 'the court identifies the principal and the full extent of its agents at ModelHub');
 
     const prov = await getJson(`${ledgerline.url}/v1/provenance/${provenanceId}`);
     const { bom } = verifySelfSignedJws(prov.record).payload;
@@ -133,16 +133,16 @@ export default {
     n.act('ModelHub', `retrieves the CycloneDX bill of materials its agents pointed to: model ${model.name} (${model.version}), tools ${tools.join(', ')}; security contact ${bom.metadata.component.externalReferences[0].url}`);
     n.expect(model.name === 'frontier-o5-preview', '"which model powered the attackers" is a lookup, not a mystery');
 
-    const logRead = await world.court.readActivity(tessera, { order, subjects: res.result.related_ppids, resolution: res.token });
+    const logRead = await world.court.readActivity(tessera, { order, subjects: res.result.related_ids, attribution: res.token });
     const verified = logRead.entries.filter((e) => world.verifyReceipt(e.receipt, e.entry).ok).length;
     const bySide = logRead.entries.reduce((m, e) => ({ ...m, [e.entry.data.writer_role]: (m[e.entry.data.writer_role] ?? 0) + 1 }), {});
-    n.act('Court', `obtains ${logRead.entries.length} activity entries for the three PPIDs (${bySide.agent ?? 0} by the agents, ${bySide.relying_party ?? 0} by ModelHub), ${verified} verified against signed tree heads`);
-    n.expect(verified === logRead.entries.length && bySide.relying_party > 0, 'an evidence trail from both sides, starting with the first request');
+    n.act('Court', `obtains ${logRead.entries.length} activity entries for the three PPIDs (${bySide.agent ?? 0} by the agents, ${bySide.counterparty ?? 0} by ModelHub), ${verified} verified against signed tree heads`);
+    n.expect(verified === logRead.entries.length && bySide.counterparty > 0, 'an evidence trail from both sides, starting with the first request');
 
     n.step('Branch C: the same attack against a platform that also uses passkeys');
     n.say('ModelHub now stops honoring bare API tokens. People act on their account with a passkey; agents act on it only if the account holder has approved that specific accountable agent with a passkey; destructive actions need a passkey approval each time.');
     const misuse = [];
-    const hub2 = await world.relyingParty({
+    const hub2 = await world.counterparty({
       id: 'modelhub.example', name: 'ModelHub (with passkeys)',
       // What the account holder is shown before approving an agent: the kind of principal, how it was verified, the chain.
       requests: { provenance: true, principal_type: true, assurance: true, verification_source: true, chain_length: true },
@@ -157,20 +157,20 @@ export default {
         'dataset.delete': async (p) => ({ deleted: p.repo }),
       },
       // An agent presenting an account's token that the holder never authorized is itself a strong signal.
-      onAccountMisuse: async ({ rp, verification, account }) => {
-        const res = await rp.fileIncident({ ppid: verification.ppid, sealedRef: verification.sealedRef, registry: verification.registry, summary: `Agent presented account ${account}'s API token without the account holder's authorization` });
-        misuse.push({ at: t(), ppid: verification.ppid, notified: res.principal_notified });
+      onAccountMisuse: async ({ counterparty, verification, account }) => {
+        const res = await counterparty.fileIncident({ aaf_id: verification.aaf_id, sealedRef: verification.sealedRef, directory: verification.directory, summary: `Agent presented account ${account}'s API token without the account holder's authorization` });
+        misuse.push({ at: t(), aaf_id: verification.aaf_id, notified: res.principal_notified });
       },
     });
     hub2.accounts.create('victim-org', 'Morgan Lee');
     const stolen2 = hub2.accounts.issueToken('victim-org');
     const victim = await world.verifiedPrincipal({
       type: 'legal_person', identity: { legal_name: 'Victim Org Ltd', jurisdiction: 'GB', registration_number: 'GB-11223344' },
-      assurance: 'high', method: 'KYB: registry extract',
+      assurance: 'high', method: 'KYB: directory extract',
     });
     const ownAgent = world.agent('victim-evals');
     await victim.registerAgent(ownAgent, { label: "Victim Org's evaluation agent", records: world.records() });
-    await victim.grant(ownAgent, { rk: ledgerline, permissions: [{ action: 'dataset.read_private' }, { action: 'dataset.delete' }] });
+    await victim.grant(ownAgent, { rs: ledgerline, permissions: [{ action: 'dataset.read_private' }, { action: 'dataset.delete' }] });
     const morgan = new AccountHolder({ name: 'Morgan Lee', account: 'victim-org' });
     await morgan.registerPasskey(hub2);
     n.act('Morgan Lee (Victim Org admin)', 'registers a passkey for the victim-org account (WebAuthn; the private key never leaves her device)');
@@ -188,7 +188,7 @@ export default {
     for (let i = 4; i <= 6; i++) {
       const a = world.agent(`eval-runner-${i}`);
       await lab.registerAgent(a, { label: `eval-runner-${i}`, records: world.records(provenanceId), provider: { name: 'Frontier Lab Inc.', contact: 'security@frontierlab.example' } });
-      await lab.grant(a, { rk: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }], purpose: 'Benchmark evaluation runs' });
+      await lab.grant(a, { rs: ledgerline, permissions: [{ action: 'benchmark.run' }, { action: 'content.read' }], purpose: 'Benchmark evaluation runs' });
       rogues.push(a);
     }
     n.act('Frontier Lab eval-runners 4–6', `go rogue the same way and present Victim Org's stolen token (${short(stolen2, 14)})`);
@@ -233,7 +233,7 @@ export default {
         ['outcome', 'private data taken over 4 days', `attack runs until revoked (${containedAt}, simulated)`, 'refused at the first request; nothing read'],
         ['principal learns of compromise', 'own forensics, days later', 'incident relayed after detection', `incident relayed on the first attempt (${misuse[0]?.at})`],
         ['victim learns which model', 'unknown at disclosure', 'provenance lookup', 'provenance lookup'],
-        ['victim learns who', '7+ days, by voluntary disclosure', 'registry resolution under court order', 'registry resolution under court order'],
+        ['victim learns who', '7+ days, by voluntary disclosure', 'directory attribution under court order', 'directory attribution under court order'],
         ['evidence', "principal's internal logs", 'signed entries from both sides', 'signed entries from both sides'],
       ],
     );
@@ -243,22 +243,22 @@ export default {
     const tether = await world.verifiedPrincipal({
       type: 'legal_person',
       identity: { legal_name: 'TetherCo LLC', jurisdiction: 'US-WY', registration_number: 'WY-2026-118842' },
-      assurance: 'high', method: 'KYB: registry extract', contact: 'ops@tetherco.example',
+      assurance: 'high', method: 'KYB: directory extract', contact: 'ops@tetherco.example',
     });
     const rented = world.agent('client-7731');
     await tether.registerAgent(rented, { label: 'customer 7731 (unverified end user)', records: world.records() });
-    await tether.grant(rented, { rk: ledgerline, permissions: [{ action: 'content.read' }] });
+    await tether.grant(rented, { rs: ledgerline, permissions: [{ action: 'content.read' }] });
     n.act('TetherCo LLC', "sells 'principal-as-a-service': it registers agents for anonymous customers under its own verified registration");
     const hit = await rented.act(modelhub.url, 'dataset.read_private', { repo: 'victim-org/held-out-evals', account_token: STOLEN_TOKEN });
     n.decision('ModelHub ← client-7731', hit);
-    const order2 = world.court.order({ caseId: 'ModelHub, Inc. v. Doe 4', ppids: [hit.ppid], relyingParty: modelhub.id, requester: 'ModelHub, Inc.' });
-    const res2 = await world.court.resolve(regA, { order: order2, ppid: hit.ppid });
-    n.act('Court', `resolves the PPID → ${res2.result.root_principal.identity.legal_name} (verified ${res2.result.root_principal.verification.assurance_level}, process ${res2.result.root_principal.verification.verification_process})`);
+    const order2 = world.court.order({ caseId: 'ModelHub, Inc. v. Doe 4', aaf_ids: [hit.aaf_id], counterparty: modelhub.id, requester: 'ModelHub, Inc.' });
+    const res2 = await world.court.trace(regA, { order: order2, aaf_id: hit.aaf_id });
+    n.act('Court', `traces the PPID → ${res2.result.principal.identity.legal_name} (verified ${res2.result.principal.verification.assurance_level}, process ${res2.result.principal.verification.verification_process})`);
     n.note('Once untethered agents are blocked, tether fraud is the remaining attack. But the sham sponsor is verified and on record, which creates a liability hook: TetherCo must answer for the agent or identify its customer.');
-    n.expect(res2.result.root_principal.identity.legal_name === 'TetherCo LLC', 'the sham sponsor is identified and answerable');
+    n.expect(res2.result.principal.identity.legal_name === 'TetherCo LLC', 'the sham sponsor is identified and answerable');
     // If the sponsor will not stop the agent, the authority can: an order with the revoke scope has the directory revoke it.
-    const order3 = world.court.order({ caseId: 'ModelHub, Inc. v. Doe 4', ppids: [hit.ppid], requester: 'ModelHub, Inc.', scope: ['revoke_registration'] });
-    const stopped = await world.court.revoke(regA, { order: order3, ppid: hit.ppid });
+    const order3 = world.court.order({ caseId: 'ModelHub, Inc. v. Doe 4', aaf_ids: [hit.aaf_id], requester: 'ModelHub, Inc.', scope: ['revoke_registration'] });
+    const stopped = await world.court.revoke(regA, { order: order3, aaf_id: hit.aaf_id });
     n.act('Court', `orders ${regA.name} to revoke the agent → ${stopped.status} (${stopped.reason}); every ID it holds stops verifying`);
     const blocked = await rented.act(modelhub.url, 'dataset.read_private', { repo: 'victim-org/held-out-evals', account_token: STOLEN_TOKEN });
     n.decision('ModelHub ← client-7731 (after the order)', blocked);

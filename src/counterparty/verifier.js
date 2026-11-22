@@ -1,10 +1,10 @@
-// Relying-party (the paper's "counterparty") verification, using only the
+// Counterparty verification, using only the
 // presentation and what directories publish: keys and status lists (PR-9).
 // Turns whatever an agent presented into:
 //   - an accountability classification (disclosed / protected / unsupported /
 //     unlabeled / revoked / lookup failed),
 //   - verified, disclosed authority evaluated against the requested action,
-//   - the evidence (status list tokens etc.) the relying party should keep.
+//   - the evidence (status list tokens etc.) the counterparty should keep.
 import { verifyJws, decodeJws, thumbprint, nowSeconds, b64u } from '../lib/crypto.js';
 import { verifySdJwt } from '../lib/sd-jwt.js';
 import { verifyRequest, consumeNonce, SignatureError } from '../lib/httpsig.js';
@@ -20,35 +20,35 @@ const IDENTITY_CLAIMS = ['legal_name', 'jurisdiction', 'registration_number', 'l
 const KB_MAX_AGE_SECONDS = 60;
 
 /**
- * @param {string[]} [acceptedRegistries]  directories this counterparty accepts IDs from (default: every registry in the federation)
+ * @param {string[]} [acceptedDirectories]  directories this counterparty accepts IDs from (default: every directory in the federation)
  */
-export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
+export function createVerifier({ counterpartyId, trust, acceptedDirectories = null }) {
   const replay = new Map();
   const accreditationCache = new Map();
   const statusListCache = new Map();
   const vctOf = (kind) => vct(trust.trustAnchor.entity_id, kind);
 
   /**
-   * Is record keeper rkId accredited by registryId for a role? Asks the
-   * registry's OpenID Federation Trust Mark endpoint, verifies the Trust Mark,
-   * and checks the Trust Anchor lets that registry issue it. Cached for a minute.
+   * Is records service rsId accredited by directoryId for a role? Asks the
+   * directory's OpenID Federation Trust Mark endpoint, verifies the Trust Mark,
+   * and checks the Trust Anchor lets that directory issue it. Cached for a minute.
    */
-  async function accreditation(registryId, rkId, role) {
-    const key = `${registryId}|${rkId}|${role}`;
+  async function accreditation(directoryId, rsId, role) {
+    const key = `${directoryId}|${rsId}|${role}`;
     const hit = accreditationCache.get(key);
     if (hit && hit.until > Date.now()) return hit.value;
-    const registry = trust.registry(registryId);
+    const directory = trust.directory(directoryId);
     const type = trustMarkType(trust.trustAnchor.entity_id, role);
     let value;
     try {
-      const res = await fetch(`${registry.url}/federation/trust-mark?trust_mark_type=${encodeURIComponent(type)}&sub=${encodeURIComponent(rkId)}`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${directory.url}/federation/trust-mark?trust_mark_type=${encodeURIComponent(type)}&sub=${encodeURIComponent(rsId)}`, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) throw new Error(`no trust mark (${res.status})`);
       const mark = await res.text();
-      const { payload } = verifyJws(mark, trust.signingKey(registry, decodeJws(mark).header.kid), { typ: TRUST_MARK_TYP });
-      const ok = payload.iss === registryId && payload.sub === rkId && payload.trust_mark_type === type && payload.exp > nowSeconds() && trust.trustMarkIssuers(type).includes(registryId);
-      value = { ok, role, by: registryId, trustMark: mark };
+      const { payload } = verifyJws(mark, trust.signingKey(directory, decodeJws(mark).header.kid), { typ: TRUST_MARK_TYP });
+      const ok = payload.iss === directoryId && payload.sub === rsId && payload.trust_mark_type === type && payload.exp > nowSeconds() && trust.trustMarkIssuers(type).includes(directoryId);
+      value = { ok, role, by: directoryId, trustMark: mark };
     } catch (err) {
-      value = { ok: false, role, by: registryId, lookupFailed: err.name === 'TypeError' || err.name === 'TimeoutError' };
+      value = { ok: false, role, by: directoryId, lookupFailed: err.name === 'TypeError' || err.name === 'TimeoutError' };
     }
     accreditationCache.set(key, { value, until: Date.now() + 60000 });
     return value;
@@ -82,8 +82,8 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
       return ok;
     };
     const out = {
-      classification: null, checks, ppid: null, registry: null, mode: null, sealedRef: null,
-      root: null, chainLength: null, identity: null, attributes: [], records: [],
+      classification: null, checks, aaf_id: null, directory: null, mode: null, sealedRef: null,
+      principal: null, chainLength: null, identity: null, attributes: [], records: [],
       status: null, authorization: null, approval: null, authority: null, tokens: [], failure: null,
     };
     const fail = (classification, reason) => {
@@ -96,8 +96,8 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
     const presentationHeader = headers[HEADERS.presentation];
     if (!presentationHeader) {
       if (headers[HEADERS.selfAsserted]) {
-        check('registry credential present', false, `only a self-asserted claim: "${headers[HEADERS.selfAsserted]}"`);
-        return fail(C.UNSUPPORTED, 'self-asserted claim with no registry credential');
+        check('directory credential present', false, `only a self-asserted claim: "${headers[HEADERS.selfAsserted]}"`);
+        return fail(C.UNSUPPORTED, 'self-asserted claim with no directory credential');
       }
       return fail(C.UNLABELED, 'no accountability information presented');
     }
@@ -108,28 +108,28 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
       return fail(C.UNSUPPORTED, 'malformed presentation');
     }
 
-    // 1. Accountability credential (SD-JWT VC) from a federation registry.
+    // 1. Accountability credential (SD-JWT VC) from a federation directory.
     let att;
-    let registryKey;
+    let directoryKey;
     try {
       const { header, payload } = peek(presentation.accountability);
-      const registry = trust.registry(payload.iss);
-      if (!check('issued by a federation registry', Boolean(registry), payload.iss)) {
+      const directory = trust.directory(payload.iss);
+      if (!check('issued by a federation directory', Boolean(directory), payload.iss)) {
         return fail(C.UNSUPPORTED, `credential issuer ${payload.iss} is not a member of the federation`);
       }
-      if (acceptedRegistries && !check('directory accepted by this counterparty', acceptedRegistries.includes(registry.id), registry.id)) {
-        return fail(C.UNSUPPORTED, `this counterparty does not accept IDs from ${registry.id}`);
+      if (acceptedDirectories && !check('directory accepted by this counterparty', acceptedDirectories.includes(directory.id), directory.id)) {
+        return fail(C.UNSUPPORTED, `this counterparty does not accept IDs from ${directory.id}`);
       }
-      out.registry = registry;
-      registryKey = trust.signingKey(registry, header.kid);
-      att = verifySdJwt(presentation.accountability, registryKey, { typ: SD_JWT_VC_TYP }).payload;
+      out.directory = directory;
+      directoryKey = trust.signingKey(directory, header.kid);
+      att = verifySdJwt(presentation.accountability, directoryKey, { typ: SD_JWT_VC_TYP }).payload;
       if (att.vct !== vctOf('accountability')) throw new Error(`unexpected credential type ${att.vct}`);
-      check('registry signature valid (SD-JWT VC)', true, att.vct);
+      check('directory signature valid (SD-JWT VC)', true, att.vct);
     } catch (err) {
-      check('registry signature valid (SD-JWT VC)', false, err.message);
+      check('directory signature valid (SD-JWT VC)', false, err.message);
       return fail(C.UNSUPPORTED, `credential could not be verified: ${err.message}`);
     }
-    if (!check('issued for this relying party', att.aud === rpId, att.aud)) return fail(C.UNSUPPORTED, 'credential issued for someone else');
+    if (!check('issued for this counterparty', att.aud === counterpartyId, att.aud)) return fail(C.UNSUPPORTED, 'credential issued for someone else');
     if (!check('credential unexpired', att.exp > nowSeconds())) return fail(C.UNSUPPORTED, 'credential expired');
 
     // 2. The request is signed (RFC 9421) by the credential's cnf key, and the
@@ -144,7 +144,7 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
         resolveKey: (keyid) => (keyid === cnfKeyid ? att.cnf.jwk : null),
       });
       if (sig.keyid !== cnfKeyid || sig.thumbprint !== thumbprint(att.cnf.jwk)) throw new SignatureError('wrong_key', "request not signed by the credential's cnf key");
-      verifySdJwt(presentation.accountability, registryKey, { typ: SD_JWT_VC_TYP, keyBinding: { aud: rpId, nonce: sig.params.nonce, maxAgeSeconds: KB_MAX_AGE_SECONDS } });
+      verifySdJwt(presentation.accountability, directoryKey, { typ: SD_JWT_VC_TYP, keyBinding: { aud: counterpartyId, nonce: sig.params.nonce, maxAgeSeconds: KB_MAX_AGE_SECONDS } });
       consumeNonce(replay, sig, KB_MAX_AGE_SECONDS);
       check('request signed by the credential holder (RFC 9421 + key binding)', true, 'covers method, URL, body and presentation');
     } catch (err) {
@@ -156,10 +156,10 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
     // resolves to a principal the directory verified. Everything else is
     // whatever the agent chose to disclose.
     const a = att.accountability ?? {};
-    out.ppid = att.sub;
-    out.mode = att.id_mode ?? att.ppid_mode ?? null;
+    out.aaf_id = att.sub;
+    out.mode = att.id_mode ?? null;
     out.sealedRef = att.sealed_ref ?? null;
-    out.root = {
+    out.principal = {
       type: a.principal_type ?? null,
       trust_framework: a.assurance?.trust_framework ?? null,
       assurance_level: a.assurance?.assurance_level ?? null,
@@ -173,27 +173,27 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
     const disclosedIdentity = Object.fromEntries(IDENTITY_CLAIMS.filter((c) => a[c] !== undefined).map((c) => [c, a[c]]));
     out.identity = Object.keys(disclosedIdentity).length ? disclosedIdentity : null;
     const shown = [
-      out.root.type, out.root.assurance_level && `${out.root.trust_framework} ${out.root.assurance_level}`,
-      out.root.verifier && `verified by ${out.root.verifier}`, out.chainLength != null && `chain length ${out.chainLength}`,
+      out.principal.type, out.principal.assurance_level && `${out.principal.trust_framework} ${out.principal.assurance_level}`,
+      out.principal.verifier && `verified by ${out.principal.verifier}`, out.chainLength != null && `chain length ${out.chainLength}`,
     ].filter(Boolean);
     check('ID resolves to a principal the directory verified', a.status === 'accountable', shown.length ? `also shown: ${shown.join(', ')}` : 'nothing further disclosed');
     if (a.status !== 'accountable') return fail(C.UNSUPPORTED, 'credential does not state an accountable principal');
 
-    // 3. Status in the registry's Token Status List ("still valid?").
+    // 3. Status in the directory's Token Status List ("still valid?").
     let classification = out.identity?.legal_name ? C.DISCLOSED : C.PROTECTED;
     try {
-      const st = await statusOf(att.status, out.registry, { fresh: liveStatus });
+      const st = await statusOf(att.status, out.directory, { fresh: liveStatus });
       const reason = { [STATUS.INVALID]: 'revoked or expired', [STATUS.SUSPENDED]: 'suspended', [STATUS.TRANSFERRED]: 'custody_transferred: this principal–agent relationship has ended' }[st.code] ?? null;
       out.status = { status: st.name, idx: st.idx, uri: st.uri, reason };
       out.tokens.push(st.token);
       if (!check(`status list entry ${liveStatus ? '(fetched now)' : '(cached list)'}`, st.code === STATUS.VALID, reason ?? 'VALID')) classification = C.REVOKED;
     } catch (err) {
-      check('status list entry', false, `registry unreachable: ${err.message}`);
+      check('status list entry', false, `directory unreachable: ${err.message}`);
       classification = C.LOOKUP_FAILED;
     }
     out.classification = classification;
 
-    // 4. Authorization credential from an accredited record keeper.
+    // 4. Authorization credential from an accredited records service.
     if (presentation.authorization) out.authorization = await verifyAuthorization(presentation.authorization, att, sig.params.nonce, liveStatus, check);
 
     // 5. Approval by a designated human, if carried.
@@ -210,23 +210,23 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
   async function verifyAuthorization(sdjwt, att, nonce, liveStatus, check) {
     const result = { valid: false, reason: null, issuer: null, permissions: [], prohibitions: [], status: null };
     const { header, payload: unverified } = peek(sdjwt);
-    const rk = trust.recordKeeper(unverified.iss);
-    if (!check('authorization from a federation record keeper', Boolean(rk), unverified.iss)) return { ...result, reason: 'unknown record keeper' };
-    result.issuer = rk.id;
-    const acc = await accreditation(att.iss, rk.id, 'authorization');
-    if (!check(`record keeper holds ${att.iss}'s trust mark for authorization records`, acc.ok, acc.ok ? 'trust mark verified' : 'no valid trust mark')) {
-      return { ...result, reason: 'record keeper not accredited for authorization records' };
+    const rs = trust.recordsService(unverified.iss);
+    if (!check('authorization from a federation records service', Boolean(rs), unverified.iss)) return { ...result, reason: 'unknown records service' };
+    result.issuer = rs.id;
+    const acc = await accreditation(att.iss, rs.id, 'authorization');
+    if (!check(`records service holds ${att.iss}'s trust mark for authorization records`, acc.ok, acc.ok ? 'trust mark verified' : 'no valid trust mark')) {
+      return { ...result, reason: 'records service not accredited for authorization records' };
     }
     let az;
     try {
-      az = verifySdJwt(sdjwt, trust.signingKey(rk, header.kid), { typ: SD_JWT_VC_TYP, keyBinding: { aud: rpId, nonce, maxAgeSeconds: KB_MAX_AGE_SECONDS } }).payload;
+      az = verifySdJwt(sdjwt, trust.signingKey(rs, header.kid), { typ: SD_JWT_VC_TYP, keyBinding: { aud: counterpartyId, nonce, maxAgeSeconds: KB_MAX_AGE_SECONDS } }).payload;
       if (az.vct !== vctOf('authorization')) throw new Error(`unexpected credential type ${az.vct}`);
     } catch (err) {
       check('authorization valid (SD-JWT VC + key binding)', false, err.message);
       return { ...result, reason: `invalid authorization: ${err.message}` };
     }
     // RFC 8693 act: the acting party must be this agent; same holder key.
-    const bound = az.act?.sub === att.sub && az.aud === rpId && thumbprint(az.cnf.jwk) === thumbprint(att.cnf.jwk);
+    const bound = az.act?.sub === att.sub && az.aud === counterpartyId && thumbprint(az.cnf.jwk) === thumbprint(att.cnf.jwk);
     if (!check('authorization bound to this agent (act.sub = the ID, same cnf key)', bound)) return { ...result, reason: 'authorization not bound to this presentation' };
     if (!check('authorization unexpired', az.exp > nowSeconds())) return { ...result, reason: 'authorization expired' };
     result.permissions = az.authorization_details ?? [];
@@ -238,7 +238,7 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
     result.validUntil = az.valid_until;
     result.purpose = az.purpose;
     try {
-      const st = await statusOf(az.status, rk, { fresh: liveStatus });
+      const st = await statusOf(az.status, rs, { fresh: liveStatus });
       result.status = st.name;
       result.statusToken = st.token;
       if (!check('grant still in force (status list)', st.code === STATUS.VALID, st.name)) return { ...result, reason: `grant is ${st.name}` };
@@ -252,13 +252,13 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
 
   async function verifyApproval(sdjwt, att, action, params, check) {
     const { header, payload: unverified } = peek(sdjwt);
-    const rk = trust.recordKeeper(unverified.iss);
-    if (!rk) return { valid: false, reason: 'approval from unknown record keeper' };
-    const acc = await accreditation(att.iss, rk.id, 'authorization');
+    const rs = trust.recordsService(unverified.iss);
+    if (!rs) return { valid: false, reason: 'approval from unknown records service' };
+    const acc = await accreditation(att.iss, rs.id, 'authorization');
     if (!acc.ok) return { valid: false, reason: 'approval issuer not accredited' };
     let ap;
     try {
-      ap = verifySdJwt(sdjwt, trust.signingKey(rk, header.kid), { typ: SD_JWT_VC_TYP }).payload;
+      ap = verifySdJwt(sdjwt, trust.signingKey(rs, header.kid), { typ: SD_JWT_VC_TYP }).payload;
       if (ap.vct !== vctOf('approval')) throw new Error('not an approval credential');
     } catch {
       return { valid: false, reason: 'invalid approval signature' };
@@ -270,7 +270,7 @@ export function createVerifier({ rpId, trust, acceptedRegistries = null }) {
     if (ap.exp < nowSeconds()) problems.push('approval expired');
     if (ap.approval_method?.type !== 'webauthn' || ap.approval_method.user_verified !== true) problems.push('approval was not made with a user-verified passkey');
     try {
-      const st = await statusOf(ap.status, rk, { fresh: true });
+      const st = await statusOf(ap.status, rs, { fresh: true });
       if (st.code !== STATUS.VALID) problems.push(`approver's designation is revoked (status ${st.name})`);
     } catch {
       problems.push('approval status could not be checked');

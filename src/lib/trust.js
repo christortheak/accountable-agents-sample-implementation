@@ -63,10 +63,10 @@ export async function discoverFederation(trustAnchor) {
     trust_anchor: { entity_id: trustAnchor.entity_id, url: trustAnchor.url, jwks: trustAnchor.jwks },
     policies: taConfig.metadata.aaf_trust_anchor.policies,
     trust_mark_issuers: taConfig.trust_mark_issuers ?? {},
-    registries: [],
-    record_keepers: [],
+    directories: [],
+    records_services: [],
     verifiers: [],
-    resolution_authorities: [],
+    designated_authorities: [],
   };
   await Promise.all(
     members.map(async (sub) => {
@@ -85,13 +85,13 @@ export async function discoverFederation(trustAnchor) {
           // Not reachable yet: the Trust Anchor's statement alone vouches for it.
         }
       }
-      if (type === 'aaf_registry') doc.registries.push({ ...entry, jurisdiction: md.jurisdiction });
-      else if (type === 'aaf_record_keeper') doc.record_keepers.push({ ...entry, roles: md.roles });
+      if (type === 'aaf_directory') doc.directories.push({ ...entry, jurisdiction: md.jurisdiction });
+      else if (type === 'aaf_records_service') doc.records_services.push({ ...entry, roles: md.roles });
       else if (type === 'aaf_identity_verifier') doc.verifiers.push(entry);
-      else if (type === 'aaf_resolution_authority') doc.resolution_authorities.push(entry);
+      else if (type === 'aaf_designated_authority') doc.designated_authorities.push(entry);
     }),
   );
-  for (const list of [doc.registries, doc.record_keepers, doc.verifiers, doc.resolution_authorities]) list.sort((a, b) => a.id.localeCompare(b.id));
+  for (const list of [doc.directories, doc.records_services, doc.verifiers, doc.designated_authorities]) list.sort((a, b) => a.id.localeCompare(b.id));
   return new Federation(doc);
 }
 
@@ -169,7 +169,7 @@ export class Federation {
     return this.doc.trust_anchor;
   }
 
-  /** Registries the Trust Anchor allows to issue a given Trust Mark type. */
+  /** Directories the Trust Anchor allows to issue a given Trust Mark type. */
   trustMarkIssuers(type) {
     return this.doc.trust_mark_issuers[type] ?? [];
   }
@@ -177,28 +177,28 @@ export class Federation {
   /** A copy in which some service URLs are replaced (to simulate an outage or partition). */
   withUrlOverrides(overrides) {
     const copy = structuredClone(this.doc);
-    for (const list of [copy.registries, copy.record_keepers]) {
+    for (const list of [copy.directories, copy.records_services]) {
       for (const entry of list) if (overrides[entry.id]) entry.url = overrides[entry.id];
     }
     return new Federation(copy);
   }
 
-  registry(id) {
-    return this.doc.registries.find((r) => r.id === id) ?? null;
+  directory(id) {
+    return this.doc.directories.find((r) => r.id === id) ?? null;
   }
 
-  recordKeeper(id) {
-    return this.doc.record_keepers.find((r) => r.id === id) ?? null;
+  recordsService(id) {
+    return this.doc.records_services.find((r) => r.id === id) ?? null;
   }
 
   authority(id, kind) {
-    const list = kind === 'verifier' ? this.doc.verifiers : this.doc.resolution_authorities;
+    const list = kind === 'verifier' ? this.doc.verifiers : this.doc.designated_authorities;
     return list.find((a) => a.id === id) ?? null;
   }
 
   /** The member whose entity identifier prefixes a URI (e.g. a status list URI). */
   entityForUri(uri) {
-    return [...this.doc.registries, ...this.doc.record_keepers].find((e) => uri === e.id || uri.startsWith(`${e.id}/`)) ?? null;
+    return [...this.doc.directories, ...this.doc.records_services].find((e) => uri === e.id || uri.startsWith(`${e.id}/`)) ?? null;
   }
 
   /** Map an https URI under a member's entity identifier to where that member is actually served. */
@@ -208,12 +208,12 @@ export class Federation {
     return e.url + uri.slice(e.id.length);
   }
 
-  get registries() {
-    return this.doc.registries;
+  get directories() {
+    return this.doc.directories;
   }
 
-  get recordKeepers() {
-    return this.doc.record_keepers;
+  get recordsServices() {
+    return this.doc.records_services;
   }
 
   signingKey(entity, kid) {

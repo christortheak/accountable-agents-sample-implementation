@@ -2,20 +2,20 @@
   "header": {
     "alg": "EdDSA",
     "typ": "entity-statement+jwt",
-    "kid": "JKd3KUSxvKoemmLNOSObgnGdQM8H0FBfyTY_rOeB6PQ"
+    "kid": "fEwoempPBnepf-Aws5nnVJxNRV5Xc0VcnPK7mOGlK7c"
   },
   "payload": {
     "iss": "https://federation.aaf.test",
     "sub": "https://federation.aaf.test",
-    "iat": 1795303625,
-    "exp": 1795390025,
+    "iat": 1795357490,
+    "exp": 1795443890,
     "jwks": {
       "keys": [
         {
           "crv": "Ed25519",
-          "x": "FB3IRgPrjrDbe83UOET9DE6agsRcG052Wi-HyLQoKHA",
+          "x": "ExjqIYgQG___ah3QxBHASLMs2VWOP2-d3-O9zdbFiSo",
           "kty": "OKP",
-          "kid": "JKd3KUSxvKoemmLNOSObgnGdQM8H0FBfyTY_rOeB6PQ",
+          "kid": "fEwoempPBnepf-Aws5nnVJxNRV5Xc0VcnPK7mOGlK7c",
           "use": "sig"
         }
       ]
@@ -38,17 +38,17 @@
       }
     },
     "trust_mark_issuers": {
-      "https://federation.aaf.test/trust-marks/record-keeper/authorization": [
-        "https://registry-a.aaf.test",
-        "https://registry-b.aaf.test"
+      "https://federation.aaf.test/trust-marks/records-service/authorization": [
+        "https://directory-a.aaf.test",
+        "https://directory-b.aaf.test"
       ],
-      "https://federation.aaf.test/trust-marks/record-keeper/provenance": [
-        "https://registry-a.aaf.test",
-        "https://registry-b.aaf.test"
+      "https://federation.aaf.test/trust-marks/records-service/provenance": [
+        "https://directory-a.aaf.test",
+        "https://directory-b.aaf.test"
       ],
-      "https://federation.aaf.test/trust-marks/record-keeper/activity": [
-        "https://registry-a.aaf.test",
-        "https://registry-b.aaf.test"
+      "https://federation.aaf.test/trust-marks/records-service/activity": [
+        "https://directory-a.aaf.test",
+        "https://directory-b.aaf.test"
       ]
     }
   }

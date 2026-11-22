@@ -15,7 +15,7 @@
 	}
 }
 
-{$REGISTRY_DOMAIN} {
+{$DIRECTORY_DOMAIN} {
 	import no_admin
 	handle {
 		reverse_proxy federation:4101

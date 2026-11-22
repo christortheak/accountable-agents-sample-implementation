@@ -1,4 +1,4 @@
-// Relying-party policy: what a counterparty asks of an agent is set by the
+// Counterparty policy: what a counterparty asks of an agent is set by the
 // context (the paper's "Proportionate"; requests for more claims are PR-10).
 //
 // rules = {
@@ -44,7 +44,7 @@ export function decide(tier, v) {
       if (!needsAccountability) return allow(['open tier']);
       return {
         decision: 'deferred',
-        reasons: ['registry could not be reached, so status is unknown; consequential access withheld pending verification (not treated as evidence that no principal exists)'],
+        reasons: ['directory could not be reached, so status is unknown; consequential access withheld pending verification (not treated as evidence that no principal exists)'],
         tier: tier.label,
       };
     case C.PROTECTED:
@@ -56,16 +56,16 @@ export function decide(tier, v) {
 
   // Claims about the principal and the chain are optional in a presentation.
   // A tier that needs one asks for it (step-up) before judging it.
-  const root = v.root ?? {};
+  const principal = v.principal ?? {};
   const oneOf = (x) => [].concat(x);
   if (req.principalType) {
-    if (!root.type) return stepUp(['this tier needs the kind of principal to be shown'], ['principal_type']);
-    if (!oneOf(req.principalType).includes(root.type)) return deny([`this tier accepts only ${oneOf(req.principalType).join(' or ').replace(/_/g, ' ')} principals`]);
+    if (!principal.type) return stepUp(['this tier needs the kind of principal to be shown'], ['principal_type']);
+    if (!oneOf(req.principalType).includes(principal.type)) return deny([`this tier accepts only ${oneOf(req.principalType).join(' or ').replace(/_/g, ' ')} principals`]);
   }
   if (req.assurance || req.trustFramework) {
-    if (!root.assurance_level) return stepUp(["this tier needs the principal's assurance level to be shown"], ['assurance']);
-    if (req.trustFramework && !oneOf(req.trustFramework).includes(root.trust_framework)) return deny([`identity proofing under ${root.trust_framework} is not accepted here`]);
-    if (req.assurance && !oneOf(req.assurance).includes(root.assurance_level)) return deny([`assurance level ${root.assurance_level} is not accepted here`]);
+    if (!principal.assurance_level) return stepUp(["this tier needs the principal's assurance level to be shown"], ['assurance']);
+    if (req.trustFramework && !oneOf(req.trustFramework).includes(principal.trust_framework)) return deny([`identity proofing under ${principal.trust_framework} is not accepted here`]);
+    if (req.assurance && !oneOf(req.assurance).includes(principal.assurance_level)) return deny([`assurance level ${principal.assurance_level} is not accepted here`]);
   }
   if (req.maxChainLength != null) {
     if (v.chainLength == null) return stepUp(['this tier needs the length of the agent chain to be shown'], ['chain_length']);

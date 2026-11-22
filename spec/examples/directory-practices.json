@@ -18,7 +18,7 @@
   "ids": {
     "modes": {
       "pairwise": "reusable: at most one per agent and counterparty (a PPID)",
-      "ephemeral": "single-use and unlinkable"
+      "unlinkable": "used once, so presentations cannot be linked by their IDs"
     },
     "validity_seconds": 300,
     "claims": "every claim except the ID is selectively disclosable by the agent"
@@ -28,7 +28,7 @@
       "the principal",
       "a delegating agent, for its sub-agents",
       "this directory, for fraud or under its operating rules",
-      "a recognized authority, by legal order"
+      "a designated authority, by legal order"
     ],
     "cascades_to_sub_agents": true,
     "latency_seconds": {
@@ -50,7 +50,7 @@
     "not_held": [
       "authorizations",
       "bills of materials",
-      "activity (accredited record keepers hold these)",
+      "activity (accredited records services hold these)",
       "a lasting link from a single-use ID to its agent (the ID carries a sealed reference only this directory can open)"
     ],
     "retention_years": 5,
@@ -60,7 +60,7 @@
   "disclosure": {
     "to_counterparties": "identity claims only where the principal's disclosure policy names the claim and the counterparty",
     "attribution": {
-      "process": "a legal order from a recognized authority that names the ID; single-use IDs also need the sealed reference the counterparty kept",
+      "process": "a legal order from a designated authority that names the ID; single-use IDs also need the sealed reference the counterparty kept",
       "authorities": [
         "https://court.sdny.test",
         "https://fincen.test"

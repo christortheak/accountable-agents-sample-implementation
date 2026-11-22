@@ -1,12 +1,12 @@
 {
-  "resolution_id": "res_jkbsg7w8dpe0s3ng",
-  "ppid": "aaf:registry-a.aaf.test:p_br71p8r46x9a8dmb6p2ydmtrwm",
-  "ppid_status": "active",
-  "ppid_issued_at": "2026-11-21T23:27:05.983Z",
+  "attribution_id": "res_ymjqb2yff0bf0m9r",
+  "aaf_id": "aaf:directory-a.aaf.test:p_pdz5mx2grz8kr498ahg5ny9pn4",
+  "id_status": "active",
+  "id_issued_at": "2026-11-22T14:24:50.534Z",
   "authority": "https://court.sdny.test",
   "case": "Example v. Doe",
-  "root_principal": {
-    "principal_id": "prn_cewt16y2fhzq4rxk3wr1c76xxc",
+  "principal": {
+    "principal_id": "prn_qmd3n6mtgsh32vzcwnj5epwkyw",
     "type": "legal_person",
     "identity": {
       "legal_name": "Example Corp",
@@ -18,18 +18,18 @@
       "verifier": "https://kyc.verifier.test",
       "trust_framework": "aaf_kyb",
       "assurance_level": "high",
-      "time": "2026-11-21T23:27:05.976Z",
-      "verification_process": "kyc_aj1hrg5js5r02",
+      "time": "2026-11-22T14:24:50.524Z",
+      "verification_process": "kyc_5p5wjam6z6ww2",
       "evidence": [
         {
           "type": "electronic_record",
           "check_details": [
             {
               "check_method": "data",
-              "txn": "kyc_aj1hrg5js5r02"
+              "txn": "kyc_5p5wjam6z6ww2"
             }
           ],
-          "time": "2026-11-21T23:27:05.976Z",
+          "time": "2026-11-22T14:24:50.524Z",
           "record": {
             "type": "company_register_extract",
             "source": {
@@ -42,10 +42,10 @@
           "check_details": [
             {
               "check_method": "data",
-              "txn": "kyc_aj1hrg5js5r02"
+              "txn": "kyc_5p5wjam6z6ww2"
             }
           ],
-          "time": "2026-11-21T23:27:05.976Z",
+          "time": "2026-11-22T14:24:50.524Z",
           "record": {
             "type": "beneficial_ownership_register",
             "source": {
@@ -55,20 +55,20 @@
         }
       ]
     },
-    "registry": "https://registry-a.aaf.test"
+    "directory": "https://directory-a.aaf.test"
   },
   "chain": [
     {
-      "registry": "https://registry-a.aaf.test",
-      "registration_id": "reg_8rmfjcqpw2pe1624c73r88rnp8",
+      "directory": "https://directory-a.aaf.test",
+      "registration_id": "reg_r1kdds8vthmj9gg98jgcgpzw0c",
       "label": "purchasing agent",
       "status": "active",
       "reason": null,
-      "created_at": "2026-11-21T23:27:05.980Z",
+      "created_at": "2026-11-22T14:24:50.530Z",
       "revoked_at": null,
       "expires_at": null,
       "provider": null
     }
   ],
-  "related_ppids": []
+  "related_ids": []
 }

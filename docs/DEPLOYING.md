@@ -9,25 +9,25 @@ One server runs four public services behind HTTPS, each on its own subdomain:
 | Service | Example address | What it does |
 |---|---|---|
 | Trust anchor | `https://federation.example.org` | the federation's governance body: lists members and vouches for their keys (OpenID Federation) |
-| Registry | `https://registry.example.org` | verifies principals, registers agents, issues IDs, publishes status and its practices, resolves and revokes under orders (the paper's "directory") |
-| Record keeper | `https://records.example.org` | authorization records and token exchange, provenance, activity logs |
-| Sandbox shop | `https://shop.example.org` | a relying party (the paper's "counterparty") where agents transact; its home page shows every decision and what it learned |
+| Directory | `https://directory.example.org` | verifies principals, registers agents, issues IDs, publishes status and its practices, traces IDs and revokes agents under legal orders |
+| Records service | `https://records.example.org` | the directory's record-keeping, run as its own service: authorization records and token exchange, provenance, activity logs |
+| Sandbox shop | `https://shop.example.org` | a counterparty where agents transact; its home page shows every decision and what it learned |
 
 As the operator you also play two roles that can't be automated in a pilot:
 - **Identity verifier:** you confirm who each participant is, for example from personal knowledge, and record it with one command. The federation calls this "verified by the pilot team"; it is not a KYC check.
-- **Resolution authority:** a mock court, used only to demonstrate how identity is resolved under a legal order.
+- **Designated authority:** a mock court, used only to demonstrate attribution: how an ID is traced to its principal under a legal order.
 
 ## Before you start
 
 - **Not production.** There is no rate limiting. Replay protection is kept in memory, so it resets when a service restarts. Service keys can't be rotated, and the only copy of each is on the server's disk.
 - **Invite only.** Run it for a small, invited group and keep it to the pilot's lifetime.
-- **Personal data.** The registry stores the identity claims each participant enrolls with, and you, as operator, can read them. Ask participants to enroll with a name only, and agree in advance how long the pilot keeps data.
+- **Personal data.** The directory stores the identity claims each participant enrolls with, and you, as operator, can read them. Ask participants to enroll with a name only, and agree in advance how long the pilot keeps data.
 - **Keep secrets private.** Your configured copies (`deploy/.env`, `config/*.pilot.json`) and everything in the data volumes are kept out of git. Never commit them.
 
 ## Prerequisites
 
 - A Linux server (1 vCPU and 1 GB of RAM is plenty) with Docker and Docker Compose, and ports 80 and 443 open.
-- A domain you control, with four DNS names pointing at the server's public IP address. For example: `federation`, `registry`, `records` and `shop`, each `.example.org`.
+- A domain you control, with four DNS names pointing at the server's public IP address. For example: `federation`, `directory`, `records` and `shop`, each `.example.org`.
 - The server must be able to reach its own public addresses, because the services talk to each other through them. On most cloud servers this works without any extra setup.
 
 ## Check it on one machine first
@@ -44,7 +44,7 @@ It uses the same image, Compose file and Caddyfile as a real pilot. The pilot's 
 - registering an agent and granting it authority;
 - purchases the shop allows, asks for more on, and denies;
 - `/admin` blocked;
-- resolving an ID;
+- tracing an ID to its principal;
 - a restart that keeps every key and record.
 
 It takes a few minutes and removes everything afterwards (`--keep` leaves it running). It runs as its own Compose project on 127.0.0.1:8443, so it can't touch a real pilot on the same server. The one thing it can't check is that Let's Encrypt issues certificates for your domains; that happens on the first real start.
@@ -68,13 +68,13 @@ cp config/federation.pilot.example.json config/federation.pilot.json
 ```
 
 ```bash
-cp config/rp.pilot.example.json config/rp.pilot.json
+cp config/counterparty.pilot.example.json config/counterparty.pilot.json
 ```
 
 In all three copies, replace `example.org` with your domain. The names must match exactly across the files:
 - `deploy/.env` tells the HTTPS proxy which names to serve.
 - `config/federation.pilot.json` gives each service's `id` and `publicUrl`.
-- `config/rp.pilot.json` gives the shop's `id`, its `publicUrl`, and the trust anchor's address.
+- `config/counterparty.pilot.json` gives the shop's `id`, its `publicUrl`, and the trust anchor's address.
 
 You can also change the names of the services, the federation's policies, and the shop's rules: which actions it offers and what each requires. Policy tiers are explained in the specification, §10.3.
 
@@ -85,9 +85,9 @@ A shop learns only an agent's ID unless it asks for more. To set acceptance crit
     "principalType": "legal_person", "assurance": ["high"], "maxChainLength": 2 } }
 ```
 
-To accept IDs from only some registries, list them in the shop's config: `"acceptedRegistries": ["https://registry.example.org"]`.
+To accept IDs from only some directories, list them in the shop's config: `"acceptedDirectories": ["https://directory.example.org"]`.
 
-The registry publishes its practices, which include how it verifies people, how long IDs last, who may revoke and how identities are released. They are at `https://registry.example.org/v1/practices`. Read them once the pilot is up: they are what you are telling participants and shops.
+The directory publishes its practices, which include how it verifies people, how long IDs last, who may revoke and how identities are released. They are at `https://directory.example.org/v1/practices`. Read them once the pilot is up: they are what you are telling participants and shops.
 
 ## 2. Start it
 
@@ -98,8 +98,8 @@ docker compose -f deploy/docker-compose.yml up -d --build
 On the first start:
 1. The federation container generates every service's keys into its data volume.
 2. Caddy obtains HTTPS certificates for the four names.
-3. The registry, record keeper and shop discover one another through the trust anchor.
-4. The registry accredits the record keeper by issuing trust marks.
+3. The directory, records service and shop discover one another through the trust anchor.
+4. The directory accredits the records service by issuing trust marks.
 
 This can take a minute while certificates are issued. Follow it with:
 
@@ -123,13 +123,13 @@ Send both to participants through a channel they already trust, together with [P
 aaf init https://federation.example.org --pin <thumbprint>
 ```
 
-Participants may also pass `--entity-id <trust anchor entity id>` to check the identifier (the `trustAnchor.id` in your federation config). A standalone relying party takes the same settings in its config: `"trustAnchor": { "url": …, "pin": "<thumbprint>", "entityId": "<id>" }`; with `pin` null or omitted it trusts on first use, and with `entityId` omitted the identifier is not checked. Any other non-string or empty `pin`, and an `entityId` that is present but not an absolute URL string (including null), stops startup instead.
+Participants may also pass `--entity-id <trust anchor entity id>` to check the identifier (the `trustAnchor.id` in your federation config). A standalone counterparty takes the same settings in its config: `"trustAnchor": { "url": …, "pin": "<thumbprint>", "entityId": "<id>" }`; with `pin` null or omitted it trusts on first use, and with `entityId` omitted the identifier is not checked. Any other non-string or empty `pin`, and an `entityId` that is present but not an absolute URL string (including null), stops startup instead.
 
-The pinned key stays the only trusted trust anchor key; newly advertised keys are not picked up. If you replace the trust anchor's key, send participants the new thumbprint: each re-pins with `aaf init … --pin <new>` (and relying parties update `pin` and restart).
+The pinned key stays the only trusted trust anchor key; newly advertised keys are not picked up. If you replace the trust anchor's key, send participants the new thumbprint: each re-pins with `aaf init … --pin <new>` (and counterparties update `pin` and restart).
 
 **Migration from earlier versions.** A participant's existing `~/.aaf/config.json` keeps working while the trust anchor key is unchanged, but discovery now verifies Subordinate Statements with that saved key rather than with whatever keys the trust anchor currently advertises. Re-running `aaf init <url> --pin <thumbprint>` saves just the pinned key.
 
-Other intentional compatibility changes: trust on first use now saves only the key that signed (with its advertised `kid`), not every advertised key; an empty-string `pin` in a relying-party config, previously treated as no pin, is now refused; and a trust anchor whose `iss` is not an absolute URL equal to its `sub` is refused.
+Other intentional compatibility changes: trust on first use now saves only the key that signed (with its advertised `kid`), not every advertised key; an empty-string `pin` in a counterparty config, previously treated as no pin, is now refused; and a trust anchor whose `iss` is not an absolute URL equal to its `sub` is refused.
 
 ## 4. Verify participants
 
@@ -141,7 +141,7 @@ docker compose -f deploy/docker-compose.yml exec -T federation node src/cli/aaf.
 
 From then on, the participant can register agents.
 
-The registry keeps one principal record per verified person or organization, so the same person can't be verified twice. If a participant loses their `~/.aaf` folder, close their old record first, then verify their new enrollment. Their old agents stop working; their history is kept.
+The directory keeps one principal record per verified person or organization, so the same person can't be verified twice. If a participant loses their `~/.aaf` folder, close their old record first, then verify their new enrollment. Their old agents stop working; their history is kept.
 
 ```bash
 docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator close-principal <principal-id>
@@ -152,12 +152,12 @@ docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js 
 To show how a court order identifies the principal behind an agent, take an ID from the shop's page:
 
 ```bash
-docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator resolve <id> --case "pilot demonstration" --rp https://shop.example.org
+docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator trace <id> --case "pilot demonstration" --counterparty https://shop.example.org
 ```
 
-The participant is notified that their agent was resolved, unless you add `--no-notify`. Each resolution is also logged in the registry's transparency log.
+The participant is notified that their agent's ID was traced, unless you add `--no-notify`. Each attribution is also logged in the directory's transparency log.
 
-An order can also have the registry revoke the agent behind an ID, with everything below it:
+An order can also have the directory revoke the agent behind an ID, with everything below it:
 
 ```bash
 docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js operator revoke <id> --case "pilot demonstration"
@@ -172,6 +172,8 @@ docker compose -f deploy/docker-compose.yml exec federation node src/cli/aaf.js 
 | Back up the federation's keys and records | `docker compose -f deploy/docker-compose.yml exec -T federation tar czf - -C /data . > federation-backup.tgz` |
 | Update to newer code | `git pull`, then `docker compose -f deploy/docker-compose.yml up -d --build` (state is kept) |
 | Restart | `docker compose -f deploy/docker-compose.yml restart` |
+
+Profile 0.4 renamed services, fields and commands to the paper's terms: the registry is the directory, the record keeper is the records service, a relying party is a counterparty, and `operator resolve` is `operator trace`. The specification's §1.1 lists every change. A pilot started on an earlier profile can't be updated in place. End it and start a new one from fresh copies of `deploy/.env` and the two config files; the directory's DNS name, the `DIRECTORY_DOMAIN` setting and the shop's config file name (`config/counterparty.pilot.json`) are new. Participants join the new federation with `aaf init` again.
 
 Back up after first start and regularly afterwards. The federation volume holds the only copies of the service keys. If they are lost, participants have to rejoin a new federation.
 
@@ -196,13 +198,13 @@ AAF_CONFIG=config/federation.pilot.json AAF_STARTUP_TIMEOUT_SECONDS=120 npm star
 ```
 
 ```bash
-node src/rp/standalone.js --config config/rp.pilot.json
+node src/counterparty/standalone.js --config config/counterparty.pilot.json
 ```
 
 Services listen on the ports in the config, on all interfaces if `listenHost` is `0.0.0.0`. They verify request signatures against the `publicUrl`, because that is the address callers sign. If the proxy serves a different name, every signed request fails.
 
 ## Adding more
 
-- **A second registry or record keeper** on the same server is another entry in `config/federation.pilot.json`, plus a matching domain in `deploy/.env` and the `Caddyfile`. The local configuration (`config/federation.json`) shows a two-registry federation.
+- **A second directory or records service** on the same server is another entry in `config/federation.pilot.json`, plus a matching domain in `deploy/.env` and the `Caddyfile`. The local configuration (`config/federation.json`) shows a two-directory federation.
 - **A service run by a different operator** on their own server is not automated yet. The trust anchor would need that service's public keys added to its records by hand.
-- **Another relying party** can run anywhere: another copy of `config/rp.pilot.json` with its own id, domain and rules, pointing at the trust anchor.
+- **Another counterparty** can run anywhere: another copy of `config/counterparty.pilot.json` with its own id, domain and rules, pointing at the trust anchor.

@@ -14,7 +14,7 @@ export default {
 
   async run(world, n) {
     const { ledgerline, tessera } = world;
-    const agency = await world.relyingParty({
+    const agency = await world.counterparty({
       id: 'portal.state-health.example', name: 'State Health Agency filing portal',
       requests: { identity: true },
       rules: {
@@ -26,7 +26,7 @@ export default {
         'filing.submit': async (p) => ({ confirmation: `SHA-${p.subject_digest.slice(0, 8).toUpperCase()}`, received: new Date().toISOString() }),
       },
     });
-    const labApi = await world.relyingParty({
+    const labApi = await world.counterparty({
       id: 'results.regional-lab.example', name: 'Regional Lab results API',
       requests: { attributes: ['licensed_healthcare_provider'] },
       rules: { 'labs.read_results': [{ label: 'licensed providers only', require: { accountability: 'established', authorization: true, attributes: ['licensed_healthcare_provider'] } }] },
@@ -59,12 +59,12 @@ export default {
     await northwind.registerAgent(filer, { label: 'Medi-Cal cost report filer', records: world.records(provenanceId), provider: { name: 'Clerkwise Inc.' } });
     const priya = world.person('Priya Raman');
     await priya.registerPasskey(ledgerline);
-    const designation = await northwind.designate(priya, { rk: ledgerline, role: 'designated-officer' });
+    const designation = await northwind.designate(priya, { rs: ledgerline, role: 'designated-officer' });
     n.act('Priya Raman', `registers a passkey with ${ledgerline.name} (WebAuthn; her device keeps the private key)`);
     n.act('Northwind', `designates the holder of that passkey as designated officer (record ${short(designation.grant_id, 14)})`);
 
     await northwind.grant(filer, {
-      rk: ledgerline,
+      rs: ledgerline,
       permissions: [
         { action: 'filing.draft' }, { action: 'filing.assemble' }, { action: 'filing.validate' },
         { action: 'filing.submit', constraints: { requires_approval: { role: 'designated-officer' } } },
@@ -92,8 +92,8 @@ export default {
     n.expect(direct.decision === 'deny' && /approval/.test(direct.reasons.join()), 'direct submission refused: it exceeds the agent\'s scope without officer approval');
 
     n.step('Priya reviews the document and approves it; the agent submits');
-    const ppidAtAgency = filer.contexts.get(agency.id).ppid;
-    const approval = await priya.approve({ rk: ledgerline, designationId: designation.grant_id, ppid: ppidAtAgency, action: 'filing.submit', subjectDigest: q3Digest, note: 'Reviewed totals against GL' });
+    const idAtAgency = filer.contexts.get(agency.id).aaf_id;
+    const approval = await priya.approve({ rs: ledgerline, designationId: designation.grant_id, aaf_id: idAtAgency, action: 'filing.submit', subjectDigest: q3Digest, note: 'Reviewed totals against GL' });
     n.act('Priya Raman', `approves document ${short(q3Digest, 12)} with her passkey: Ledgerline's challenge commits to the agent, the action and the document, and her authenticator signs only after verifying her (Face ID / PIN)`);
     n.act('Ledgerline Records', 'verifies the passkey assertion (user verified), confirms her designation is current, and countersigns an approval credential');
     const submit = await filer.act(agency.url, 'filing.submit', { form: q3.form, subject_digest: q3Digest }, { approval: approval.approval });
@@ -110,7 +110,7 @@ export default {
     n.step("Failure variant: the officer's approval authority is revoked");
     const amended = { ...q3, amendment: 1, totals: { inpatient: 1841005, outpatient: 902114 } };
     const amendedDigest = digestOf(amended);
-    const approval2 = await priya.approve({ rk: ledgerline, designationId: designation.grant_id, ppid: ppidAtAgency, action: 'filing.submit', subjectDigest: amendedDigest });
+    const approval2 = await priya.approve({ rs: ledgerline, designationId: designation.grant_id, aaf_id: idAtAgency, action: 'filing.submit', subjectDigest: amendedDigest });
     n.act('Priya Raman', 'approves an amended filing, then leaves Northwind');
     await northwind.revokeGrant(ledgerline, designation.grant_id, 'role_ended');
     n.act('Northwind', "revokes Priya's designation");
@@ -118,7 +118,7 @@ export default {
     n.decision('Agency', late);
     let fresh = null;
     try {
-      await priya.approve({ rk: ledgerline, designationId: designation.grant_id, ppid: ppidAtAgency, action: 'filing.submit', subjectDigest: amendedDigest });
+      await priya.approve({ rs: ledgerline, designationId: designation.grant_id, aaf_id: idAtAgency, action: 'filing.submit', subjectDigest: amendedDigest });
     } catch (err) {
       fresh = err;
     }
@@ -126,18 +126,18 @@ export default {
     n.expect(late.decision === 'deny' && /designation is revoked/.test(late.reasons.join()), 'approval from a revoked officer refused at the agency');
 
     n.step('Months later: Northwind disputes that the Q3 filing was authorized');
-    const order = world.court.order({ caseId: 'Northwind v. State Health Agency, No. 26-cv-0912', ppids: [ppidAtAgency], relyingParty: agency.id, requester: 'State Health Agency' });
-    const log = await world.court.readActivity(tessera, { order, subjects: [ppidAtAgency] });
+    const order = world.court.order({ caseId: 'Northwind v. State Health Agency, No. 26-cv-0912', aaf_ids: [idAtAgency], counterparty: agency.id, requester: 'State Health Agency' });
+    const log = await world.court.readActivity(tessera, { order, subjects: [idAtAgency] });
     const rows = log.entries.map((e) => {
       const p = payloadOf(e.entry.data.jws);
       const ok = world.verifyReceipt(e.receipt, e.entry).ok;
       return [e.index, p.writer_role === 'agent' ? 'agent' : p.writer, p.event, p.details.action, p.details.decision ?? p.details.outcome, ok ? 'verified' : 'FAILED'];
     });
-    n.say('Under court order, the activity log for the agent\'s PPID at the agency is produced. Each entry is signed by the party that wrote it and proven to be in the keeper\'s log:');
+    n.say('Under court order, the activity log for the agent\'s PPID at the agency is produced. Each entry is signed by the party that wrote it and proven to be in the records service\'s log:');
     n.table(['#', 'written by', 'event', 'action', 'outcome', 'inclusion proof'], rows);
     n.say(`${ledgerline.name} separately holds Northwind's signed grant and the approval record tying Priya's signature to document ${short(q3Digest, 12)}.`);
     const writers = new Set(log.entries.map((e) => e.entry.data.writer_role));
-    n.expect(writers.has('agent') && writers.has('relying_party') && rows.every((r) => r[5] === 'verified'), 'both sides\' accounts are present and every entry verifies against a signed tree head');
+    n.expect(writers.has('agent') && writers.has('counterparty') && rows.every((r) => r[5] === 'verified'), 'both sides\' accounts are present and every entry verifies against a signed tree head');
 
     n.step('Healthcare variant: proving licensure without naming the provider');
     const lab = await filer.act(labApi.url, 'labs.read_results', { patient_cohort: 'Q3-diabetes-panel' });

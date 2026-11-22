@@ -2,7 +2,7 @@
   "verification": {
     "trust_framework": "aaf_kyb",
     "assurance_level": "high",
-    "time": "2026-11-21T23:27:05.976Z",
+    "time": "2026-11-22T14:24:50.524Z",
     "verification_process": "kyc_example",
     "evidence": [
       {
@@ -13,7 +13,7 @@
             "txn": "kyc_example"
           }
         ],
-        "time": "2026-11-21T23:27:05.976Z",
+        "time": "2026-11-22T14:24:50.524Z",
         "record": {
           "type": "company_register_extract",
           "source": {
@@ -29,7 +29,7 @@
             "txn": "kyc_example"
           }
         ],
-        "time": "2026-11-21T23:27:05.976Z",
+        "time": "2026-11-22T14:24:50.524Z",
         "record": {
           "type": "beneficial_ownership_register",
           "source": {

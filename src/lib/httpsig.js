@@ -1,12 +1,12 @@
 // HTTP Message Signatures (RFC 9421) with Ed25519, and Content-Digest (RFC 9530).
 //
-// Used for every authenticated call between parties (principal → registry,
-// agent → record keeper, registry → registry, ...) and, with the agent's
-// presentation key, for agent → relying-party requests (the Web Bot Auth
+// Used for every authenticated call between parties (principal → directory,
+// agent → records service, directory → directory, ...) and, with the agent's
+// presentation key, for agent → counterparty requests (the Web Bot Auth
 // pattern).
 //
 // keyid conventions in this profile:
-//   "principal:<id>", "registration:<id>", "verifier:<entity>", "registry:<entity>"
+//   "principal:<id>", "registration:<id>", "verifier:<entity>", "directory:<entity>"
 //       a key the receiving service already knows
 //   "jkt:<RFC 7638 thumbprint>"
 //       a self-presented key, carried in the request body as `signer_jwk`

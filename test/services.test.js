@@ -23,36 +23,36 @@ async function withFederation(dataDir, fn) {
   }
 }
 
-test('registry and record keeper state survive a restart (event-sourced from their logs)', { timeout: 30000 }, async () => {
+test('directory and records service state survive a restart (event-sourced from their logs)', { timeout: 30000 }, async () => {
   const dataDir = tmp();
   const saved = await withFederation(dataDir, async ({ trustList, paths }) => {
-    const regA = trustList.registry('https://registry-a.aaf.test');
-    const rk = trustList.recordKeeper('https://records-1.aaf.test');
-    const p = new Principal({ type: 'natural_person', identity: { legal_name: 'Test Person', jurisdiction: 'US' }, registry: regA, trust: trustList });
+    const regA = trustList.directory('https://directory-a.aaf.test');
+    const rs = trustList.recordsService('https://records-1.aaf.test');
+    const p = new Principal({ type: 'natural_person', identity: { legal_name: 'Test Person', jurisdiction: 'US' }, directory: regA, trust: trustList });
     await p.enroll();
     await new IdentityVerifier({ id: 'https://kyc.verifier.test', keys: loadKeys('https://kyc.verifier.test', paths.keysDir) }).verify(p, { assurance: 'IAL2', method: 'test' });
     const a = new Agent({ name: 'A', trust: trustList });
-    await p.registerAgent(a, { label: 'a', records: [{ role: 'authorization', rk: rk.id }] });
-    const g = await p.grant(a, { rk, permissions: [{ action: 'x.read' }] });
-    const ctx = await a.contextFor('rp.test');
+    await p.registerAgent(a, { label: 'a', records: [{ role: 'authorization', rs: rs.id }] });
+    const g = await p.grant(a, { rs, permissions: [{ action: 'x.read' }] });
+    const ctx = await a.contextFor('counterparty.test');
     const sth = (await getJson(`${regA.url}/v1/transparency/sth`)).sth;
-    return { ppid: ctx.ppid, grantId: g.grant_id, sth, regA };
+    return { aaf_id: ctx.aaf_id, grantId: g.grant_id, sth, regA };
   });
   await withFederation(dataDir, async ({ trustList }) => {
-    const regA = trustList.registry('https://registry-a.aaf.test');
-    const status = await postJson(`${regA.url}/v1/status`, { ppid: saved.ppid });
+    const regA = trustList.directory('https://directory-a.aaf.test');
+    const status = await postJson(`${regA.url}/v1/status`, { aaf_id: saved.aaf_id });
     assert.equal(status.status, 'active');
-    const stats = await getJson(`${trustList.recordKeeper('https://records-1.aaf.test').url}/v1/stats`);
+    const stats = await getJson(`${trustList.recordsService('https://records-1.aaf.test').url}/v1/stats`);
     assert.equal(stats.grants, 1);
     const sth = (await getJson(`${regA.url}/v1/transparency/sth`)).sth;
     assert.equal(JSON.parse(Buffer.from(sth.split('.')[1], 'base64url')).root_hash, JSON.parse(Buffer.from(saved.sth.split('.')[1], 'base64url')).root_hash);
   });
 });
 
-test('registries refuse unverified principals, replayed requests and foreign verifiers', { timeout: 30000 }, async () => {
+test('directories refuse unverified principals, replayed requests and foreign verifiers', { timeout: 30000 }, async () => {
   await withFederation(tmp(), async ({ trustList }) => {
-    const regA = trustList.registry('https://registry-a.aaf.test');
-    const p = new Principal({ type: 'legal_person', identity: { legal_name: 'Unverified LLC', jurisdiction: 'US' }, registry: regA, trust: trustList });
+    const regA = trustList.directory('https://directory-a.aaf.test');
+    const p = new Principal({ type: 'legal_person', identity: { legal_name: 'Unverified LLC', jurisdiction: 'US' }, directory: regA, trust: trustList });
     await p.enroll();
     const a = new Agent({ name: 'A', trust: trustList });
     await assert.rejects(p.registerAgent(a, { label: 'a', records: [] }), (e) => e instanceof ServiceError && e.code === 'principal_not_verified');

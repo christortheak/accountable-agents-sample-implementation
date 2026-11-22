@@ -1,4 +1,4 @@
-// HTTP binding for a record keeper. Run directly:  node src/recordkeeper/server.js <record-keeper-id>
+// HTTP binding for a records service. Run directly:  node src/records/server.js <records-service-id>
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -7,29 +7,29 @@ import { loadTrustAnchor, loadKeys, loadFederationConfig, fileNameFor, discoverW
 import { entityConfiguration, jwksOf, WELL_KNOWN } from '../lib/openid-federation.js';
 import { decodeJws } from '../lib/crypto.js';
 import { page, tiles, table, esc } from '../lib/dashboard.js';
-import { RecordKeeper, OAuthError } from './recordkeeper.js';
+import { RecordsService, OAuthError } from './records.js';
 
-export async function startRecordKeeper({ id, port, trustList, keys, dataDir, host = '127.0.0.1', allowTamperSimulation = false, quiet = false }) {
-  const entry = trustList.recordKeeper(id);
-  if (!entry) throw new Error(`record keeper ${id} is not a member of the federation`);
-  const rk = new RecordKeeper({ id, name: entry.name, roles: entry.roles, keys, trustList, dataDir, allowTamperSimulation });
-  // Callers sign the URL the federation publishes for this keeper.
+export async function startRecordsService({ id, port, trustList, keys, dataDir, host = '127.0.0.1', allowTamperSimulation = false, quiet = false }) {
+  const entry = trustList.recordsService(id);
+  if (!entry) throw new Error(`records service ${id} is not a member of the federation`);
+  const rs = new RecordsService({ id, name: entry.name, roles: entry.roles, keys, trustList, dataDir, allowTamperSimulation });
+  // Callers sign the URL the federation publishes for this records service.
   const verify = createSignatureVerifier({ publicBaseUrl: entry.url });
-  // Callers of the record keeper present their own keys; the keeper checks
+  // Callers of the records service present their own keys; the records service checks
   // what each key is entitled to (grantor, grantee, designee, writer).
   const signed = (ctx) => verify(ctx, () => null);
   const app = createApp(id);
 
-  app.get('/', () => html(dashboard(rk)));
+  app.get('/', () => html(dashboard(rs)));
   // OpenID Federation: self-signed Entity Configuration carrying the Trust Marks
-  // (accreditations) this keeper received from registries.
+  // (accreditations) this records service received from directories.
   const marksFile = dataDir ? path.join(dataDir, 'trust-marks.json') : null;
   let trustMarks = marksFile && fs.existsSync(marksFile) ? JSON.parse(fs.readFileSync(marksFile, 'utf8')) : [];
   app.get(WELL_KNOWN, () =>
     typed(
       entityConfiguration({
         entityId: id, key: keys.signing, jwks: jwksOf(keys.signing),
-        metadata: { aaf_record_keeper: rk.metadata(entry.url) }, authorityHints: [rk.trust.trustAnchor.entity_id], trustMarks,
+        metadata: { aaf_records_service: rs.metadata(entry.url) }, authorityHints: [rs.trust.trustAnchor.entity_id], trustMarks,
       }),
       'application/entity-statement+jwt',
     ),
@@ -43,66 +43,66 @@ export async function startRecordKeeper({ id, port, trustList, keys, dataDir, ho
     return { trust_marks: trustMarks.length };
   });
 
-  app.post('/v1/grants', ({ body }) => rk.depositGrant(body ?? {}));
-  app.post('/v1/grants/:id/revoke', async (ctx) => rk.revokeGrant(ctx.params.id, await signed(ctx)));
+  app.post('/v1/grants', ({ body }) => rs.depositGrant(body ?? {}));
+  app.post('/v1/grants/:id/revoke', async (ctx) => rs.revokeGrant(ctx.params.id, await signed(ctx)));
   // RFC 8693 Token Exchange endpoint (form-encoded, RFC 6749 errors).
   app.post('/token', ({ body }) => {
     try {
-      return rk.tokenExchange(body ?? {});
+      return rs.tokenExchange(body ?? {});
     } catch (err) {
       if (err instanceof OAuthError) return { __raw: true, status: err.status, body: { error: err.error, error_description: err.message } };
       if (err instanceof HttpError) return { __raw: true, status: err.status, body: { error: 'invalid_request', error_description: err.message } };
       throw err;
     }
   });
-  app.get('/status-lists/1', () => typed(rk.statusList(), 'application/statuslist+jwt'));
+  app.get('/status-lists/1', () => typed(rs.statusList(), 'application/statuslist+jwt'));
   // Passkeys for designated humans, and approvals made with them.
-  app.post('/v1/webauthn/registration-options', ({ body }) => rk.passkeyRegistrationOptions(body ?? {}));
-  app.post('/v1/webauthn/register', ({ body }) => rk.registerPasskey(body ?? {}));
-  app.post('/v1/approvals/options', ({ body }) => rk.approvalOptions(body ?? {}));
-  app.post('/v1/approvals', ({ body }) => rk.approve(body ?? {}));
-  app.post('/v1/status', ({ body }) => rk.recordStatus(body?.ref));
+  app.post('/v1/webauthn/registration-options', ({ body }) => rs.passkeyRegistrationOptions(body ?? {}));
+  app.post('/v1/webauthn/register', ({ body }) => rs.registerPasskey(body ?? {}));
+  app.post('/v1/approvals/options', ({ body }) => rs.approvalOptions(body ?? {}));
+  app.post('/v1/approvals', ({ body }) => rs.approve(body ?? {}));
+  app.post('/v1/status', ({ body }) => rs.recordStatus(body?.ref));
 
-  app.post('/v1/provenance', ({ body }) => rk.depositProvenance(body ?? {}));
-  app.get('/v1/provenance/:id', ({ params }) => rk.getProvenance(params.id));
+  app.post('/v1/provenance', ({ body }) => rs.depositProvenance(body ?? {}));
+  app.get('/v1/provenance/:id', ({ params }) => rs.getProvenance(params.id));
 
-  app.post('/v1/activity', ({ body }) => rk.appendActivity(body ?? {}));
-  app.post('/v1/activity/query', async (ctx) => rk.queryActivity(await signed(ctx)));
+  app.post('/v1/activity', ({ body }) => rs.appendActivity(body ?? {}));
+  app.post('/v1/activity/query', async (ctx) => rs.queryActivity(await signed(ctx)));
 
-  app.get('/v1/log/sth', () => ({ sth: rk.log.signedTreeHead() }));
+  app.get('/v1/log/sth', () => ({ sth: rs.log.signedTreeHead() }));
   app.get('/v1/log/proof', ({ query }) => {
     const index = Number(query.index);
-    const size = Number(query.size ?? rk.log.size);
-    if (!(index >= 0 && index < size && size <= rk.log.size)) throw new HttpError(400, 'bad_range', 'invalid index or size');
-    return { index, tree_size: size, leaf_hash: rk.log.leafHashAt(index), inclusion_proof: rk.log.inclusionProof(index, size), root_hash: rk.log.rootHash(size) };
+    const size = Number(query.size ?? rs.log.size);
+    if (!(index >= 0 && index < size && size <= rs.log.size)) throw new HttpError(400, 'bad_range', 'invalid index or size');
+    return { index, tree_size: size, leaf_hash: rs.log.leafHashAt(index), inclusion_proof: rs.log.inclusionProof(index, size), root_hash: rs.log.rootHash(size) };
   });
   app.get('/v1/log/consistency', ({ query }) => {
     const first = Number(query.first);
-    const second = Number(query.second ?? rk.log.size);
-    if (!(first >= 1 && first <= second && second <= rk.log.size)) throw new HttpError(400, 'bad_range', 'invalid sizes');
-    return { first, second, proof: rk.log.consistencyProof(first, second), second_root: rk.log.rootHash(second) };
+    const second = Number(query.second ?? rs.log.size);
+    if (!(first >= 1 && first <= second && second <= rs.log.size)) throw new HttpError(400, 'bad_range', 'invalid sizes');
+    return { first, second, proof: rs.log.consistencyProof(first, second), second_root: rs.log.rootHash(second) };
   });
-  app.get('/v1/stats', () => rk.stats());
+  app.get('/v1/stats', () => rs.stats());
 
   app.post('/admin/tamper', ({ body, headers }) => {
     if (headers.authorization !== `Bearer ${keys.adminToken}`) throw new HttpError(401, 'admin_only', 'operator token required');
-    return rk.tamper(body ?? {});
+    return rs.tamper(body ?? {});
   });
 
   const server = await app.listen(port, host);
-  if (!quiet) console.log(`[${id}] ${entry.name} listening on http://${host}:${port}  (log size ${rk.log.size})`);
-  return { recordKeeper: rk, server, close: () => closeServer(server), setTrust: (t) => (rk.trust = t) };
+  if (!quiet) console.log(`[${id}] ${entry.name} listening on http://${host}:${port}  (log size ${rs.log.size})`);
+  return { recordsService: rs, server, close: () => closeServer(server), setTrust: (t) => (rs.trust = t) };
 }
 
-function dashboard(rk) {
-  const s = rk.stats();
-  const sth = decodeJws(rk.log.signedTreeHead()).payload;
+function dashboard(rs) {
+  const s = rs.stats();
+  const sth = decodeJws(rs.log.signedTreeHead()).payload;
   const recent = [];
-  for (let i = rk.log.size - 1; i >= Math.max(0, rk.log.size - 40); i--) {
-    const e = rk.log.get(i);
-    recent.push([i, esc(e.kind), esc(e.at), `<code>${esc(rk.log.leafHashAt(i))}</code>`]);
+  for (let i = rs.log.size - 1; i >= Math.max(0, rs.log.size - 40); i--) {
+    const e = rs.log.get(i);
+    recent.push([i, esc(e.kind), esc(e.at), `<code>${esc(rs.log.leafHashAt(i))}</code>`]);
   }
-  return page(rk.name, `${rk.id} · keeps ${rk.roles.join(', ')} records · public view (hashes only)`, [
+  return page(rs.name, `${rs.id} · keeps ${rs.roles.join(', ')} records · public view (hashes only)`, [
     tiles([
       ['grants held', s.grants],
       ['active grants', s.active_grants],
@@ -122,13 +122,13 @@ function dashboard(rk) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const id = process.argv[2];
   const config = loadFederationConfig();
-  const svc = config.services.find((s) => s.id === id && s.kind === 'record-keeper');
+  const svc = config.services.find((s) => s.id === id && s.kind === 'records-service');
   if (!svc) {
-    console.error(`usage: node src/recordkeeper/server.js <record-keeper-id>  (one of: ${config.services.filter((s) => s.kind === 'record-keeper').map((s) => s.id).join(', ')})`);
+    console.error(`usage: node src/records/server.js <records-service-id>  (one of: ${config.services.filter((s) => s.kind === 'records-service').map((s) => s.id).join(', ')})`);
     process.exit(1);
   }
   const trustAnchor = loadTrustAnchor();
-  const { setTrust } = await startRecordKeeper({
+  const { setTrust } = await startRecordsService({
     id,
     port: svc.port,
     host: config.listenHost ?? config.host,
